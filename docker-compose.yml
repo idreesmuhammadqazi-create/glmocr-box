@@ -12,14 +12,9 @@ services:
       PDF_DPI: ${PDF_DPI:-200}
       MODEL_QUANT: ${MODEL_QUANT:-Q8_0}
       CONTEXT: ${CONTEXT:-8192}
-      N_GPU_LAYERS: ${N_GPU_LAYERS:-99}
+      N_GPU_LAYERS: ${N_GPU_LAYERS:-0}
       THREADS: ${THREADS:-4}
       PORT: 8000
-    devices:
-      - /dev/dri:/dev/dri
-    group_add:
-      - video
-      - render
     volumes:
       - ./models:/models
       - glmocr-cache:/cache
@@ -28,7 +23,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 180s
+      start_period: 300s
 
 volumes:
   glmocr-cache:

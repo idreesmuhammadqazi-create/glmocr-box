@@ -2,8 +2,17 @@
 
 Self-hosted GLM-OCR as a single Docker container with the **same API as Z.ai's
 `ocr.z.ai` / `layout_parsing` endpoint** — swap the base URL and key in your
-client code and you're done. Runs on AMD GPUs (RX 570 8GB tested class) via
-llama.cpp's Vulkan backend. No NVIDIA, no ROCm required.
+client code and you're done.
+
+One image, runs everywhere Docker runs:
+
+| host | command | speed |
+|---|---|---|
+| Linux + any GPU (AMD/Intel, `/dev/dri`) | `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build` | GPU-fast |
+| Windows / macOS Docker Desktop, or Linux without GPU | `docker compose up -d --build` | CPU-only (slow: ~1-3 min/page on old CPUs) |
+
+Windows Docker Desktop **cannot see AMD GPUs** in containers — GPU mode
+requires a Linux host (the RX 570 works there via Vulkan/RADV, no ROCm).
 
 ## Stack (all inside one container)
 
@@ -21,6 +30,9 @@ your code ──> shim :8000  POST /paas/v4/layout_parsing   (Bearer auth, page 
 
 ```bash
 cp .env.example .env      # set your API key, then:
+# Linux with GPU:
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+# CPU-only (Windows/macOS/no-GPU Linux):
 docker compose up -d --build
 ```
 
@@ -89,18 +101,21 @@ Other quants work too: `MODEL_QUANT=Q4_K_M` (needs `GLM-OCR-Q4_K_M.gguf` +
 
 ## Host requirements
 
-- Linux with the `amdgpu` kernel driver (any recent distro/Mesa — the RX 570
-  works through Vulkan/RADV; you do **not** need ROCm)
-- `/dev/dri` present (default everywhere)
-- 32GB RAM is plenty; layout model runs on CPU
-- Docker + docker compose plugin
+- **CPU mode** (Windows/macOS/no-GPU): just Docker. For best CPU speed use a
+  quant with `MODEL_QUANT=Q4_K_M`; raise `THREADS` to your core count
+- **GPU mode** (Linux only): `amdgpu` (AMD) or `i915/xe` (Intel) kernel driver,
+  `/dev/dri` present, user in `video`/`render` groups handled by the compose
+  override. The RX 570 works via Vulkan/RADV — you do **not** need ROCm
+- RAM: 16GB is fine; the layout model always runs on CPU
 
 ## Troubleshooting
 
 - `docker compose logs -f glm-ocr` — all three services log here
-- `docker compose exec glm-ocr vulkaninfo --summary` — must list your RX 570
-  as a RADV device. If not: `usermod -aG video,render $USER` on the host and
-  re-login
+- **GPU mode**: `docker compose exec glm-ocr vulkaninfo --summary` (vulkan-tools
+  installed in image) — must list your GPU as a device (RADV for AMD). If not:
+  `sudo usermod -aG video,render $USER` on the host and re-login
+- On CPU-only hosts llama.cpp logs "no Vulkan devices found" and falls back to
+  CPU automatically — that is expected
 - First OCR request is slow (layout model loads into RAM); subsequent ones are fast
 - If OCR output is garbled, make sure the GGUF + mmproj pair came from the same
   release of ggml-org/GLM-OCR-GGUF
