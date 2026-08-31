@@ -29,14 +29,16 @@ pip install --no-cache-dir "glmocr[selfhosted,server]" fastapi "uvicorn[standard
 if not exist %LLAMA_DIR% mkdir %LLAMA_DIR%
 if not exist %LLAMA_DIR%\llama-server.exe (
   echo [3/5] Downloading llama.cpp Vulkan build for Windows ...
-  for /f "usebackq delims=" %%u in (`powershell -NoProfile -Command "(Invoke-RestMethod 'https://api.github.com/repos/ggml-org/llama.cpp/releases/latest').assets | Where-Object { $_.name -match 'bin-win-vulkan-x64\.zip$' } | Select-Object -First 1 -ExpandProperty browser_download_url"`) do set "LLAMA_URL=%%u"
-  if not defined LLAMA_URL (echo Could not find llama.cpp release asset & pause & exit /b 1)
-  powershell -NoProfile -Command "Invoke-WebRequest -Uri '!LLAMA_URL!' -OutFile 'llama-bin\llama.zip'"
-  powershell -NoProfile -Command "Expand-Archive -Force 'llama-bin\llama.zip' 'llama-bin\tmp'"
+  set "LLAMA_URL=https://github.com/ggml-org/llama.cpp/releases/download/b10715/llama-b10715-bin-win-vulkan-x64.zip"
+  for /f "usebackq delims=" %%u in (`powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; try { $rels = Invoke-RestMethod 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=10'; foreach ($r in $rels) { $a = $r.assets | Where-Object { $_.name -match 'bin-win-vulkan-x64\.zip$' } | Select-Object -First 1; if ($a) { $a.browser_download_url; break } } } catch { }"`) do if not "%%u"=="" set "LLAMA_URL=%%u"
+  echo Using: !LLAMA_URL!
+  powershell -NoProfile -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '!LLAMA_URL!' -OutFile 'llama-bin\llama.zip'" || (echo Download failed & pause & exit /b 1)
+  powershell -NoProfile -Command "Expand-Archive -Force 'llama-bin\llama.zip' 'llama-bin\tmp'" || (echo Extract failed & pause & exit /b 1)
   for /r llama-bin\tmp %%f in (llama-server.exe) do copy /y "%%f" llama-bin\ >nul
-  xcopy /y /s llama-bin\tmp\*.dll llama-bin\ >nul
+  for /r llama-bin\tmp %%f in (*.dll) do copy /y "%%f" llama-bin\ >nul
   rmdir /s /q llama-bin\tmp
   del llama-bin\llama.zip
+  if not exist llama-bin\llama-server.exe (echo llama-server.exe not found in archive & pause & exit /b 1)
 )
 
 if not exist models mkdir models
