@@ -108,7 +108,19 @@ Other quants work too: `MODEL_QUANT=Q4_K_M` (needs `GLM-OCR-Q4_K_M.gguf` +
   override. The RX 570 works via Vulkan/RADV — you do **not** need ROCm
 - RAM: 16GB is fine; the layout model always runs on CPU
 
-## Windows + GPU? (experimental)
+## Windows native (no Docker) — guaranteed GPU
+
+Native Windows is the **guaranteed** GPU path on Windows:
+
+1. Install Python 3.10-3.12 from python.org (check "Add to PATH")
+2. Double-click `setup.bat` (one time: venv + packages + llama.cpp Vulkan
+   build + GGUF models, ~3 GB)
+3. Double-click `start.bat` — API on `http://127.0.0.1:8000/paas/v4/layout_parsing`
+
+Same API, same response format as the Docker mode. Edit `.env` for key/quant/
+threads (e.g. `MODEL_QUANT=Q4_K_M`, `THREADS=8`).
+
+## Windows + GPU via Docker? (experimental)
 
 Docker Desktop Windows runs containers in WSL2; AMD GPUs are only visible if
 WSL2 GPU paravirtualization exposes them:
@@ -121,7 +133,7 @@ WSL2 GPU paravirtualization exposes them:
    Otherwise it silently falls back to CPU.
 
 For older AMD cards this often fails at step 1 — then the only guaranteed GPU
-options are a Linux host or running llama.cpp natively on Windows.
+options are a Linux host or the native Windows path above.
 
 ## Troubleshooting
 
