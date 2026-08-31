@@ -9,6 +9,7 @@ pipeline:
     connect_timeout: 30
     request_timeout: 300
   layout:
+    model_dir: PaddlePaddle/PP-DocLayoutV3_safetensors
     device: cpu
     batch_size: 1
   page_loader:
