@@ -108,6 +108,21 @@ Other quants work too: `MODEL_QUANT=Q4_K_M` (needs `GLM-OCR-Q4_K_M.gguf` +
   override. The RX 570 works via Vulkan/RADV — you do **not** need ROCm
 - RAM: 16GB is fine; the layout model always runs on CPU
 
+## Windows + GPU? (experimental)
+
+Docker Desktop Windows runs containers in WSL2; AMD GPUs are only visible if
+WSL2 GPU paravirtualization exposes them:
+
+1. PowerShell (admin): `wsl --update` then `wsl -e ls /dev/dri`
+2. If `renderD128` appears, try the GPU override:
+   `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build`
+3. Verify with `docker compose exec glm-ocr vulkaninfo --summary` — a
+   "Microsoft Direct3D12" device means llama.cpp uses the GPU (Vulkan→D3D12).
+   Otherwise it silently falls back to CPU.
+
+For older AMD cards this often fails at step 1 — then the only guaranteed GPU
+options are a Linux host or running llama.cpp natively on Windows.
+
 ## Troubleshooting
 
 - `docker compose logs -f glm-ocr` — all three services log here
