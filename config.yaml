@@ -7,7 +7,7 @@ pipeline:
     model: glm-ocr
     api_mode: openai
     connect_timeout: 30
-    request_timeout: 300
+    request_timeout: 900
   layout:
     model_dir: PaddlePaddle/PP-DocLayoutV3_safetensors
     device: cpu
