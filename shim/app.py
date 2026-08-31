@@ -1,6 +1,5 @@
 import base64
 import io
-import mimetypes
 import os
 import re
 import time
@@ -8,6 +7,7 @@ import uuid
 
 import httpx
 import fitz
+from PIL import Image
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
@@ -15,9 +15,11 @@ UPSTREAM_URL = os.environ.get("UPSTREAM_URL", "http://127.0.0.1:5002/glmocr/pars
 API_KEY = os.environ.get("OCR_API_KEY", "")
 EMBED_IMAGES = os.environ.get("EMBED_IMAGES", "true").lower() in ("1", "true", "yes")
 PDF_DPI = int(os.environ.get("PDF_DPI", "200"))
+PAGE_LIMIT = int(os.environ.get("PAGE_LIMIT", "100"))
 MAX_FILE_MB = int(os.environ.get("MAX_FILE_MB", "80"))
 REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "900"))
 
+_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 _MD_IMG_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)")
 
 app = FastAPI(docs_url=None, redoc_url=None)
@@ -47,10 +49,6 @@ def _detect_mime(data: bytes) -> str:
     return "application/octet-stream"
 
 
-def _to_data_uri(data: bytes, mime: str) -> str:
-    return f"data:{mime};base64,{base64.b64encode(data).decode()}"
-
-
 def _slice_pdf(pdf: bytes, start: int, end: int) -> bytes:
     doc = fitz.open(stream=pdf, filetype="pdf")
     try:
@@ -66,39 +64,32 @@ def _slice_pdf(pdf: bytes, start: int, end: int) -> bytes:
         doc.close()
 
 
-async def _resolve_input(file_ref: str) -> tuple[str, bytes | None]:
-    raw: bytes
+async def _fetch_input(file_ref: str) -> tuple[bytes, str]:
     if file_ref.startswith("data:"):
         raw, mime = _decode_data_uri(file_ref)
-    elif file_ref.startswith(("http://", "https://", "file://")):
-        if file_ref.startswith("file://"):
-            with open(file_ref[7:], "rb") as f:
-                raw = f.read()
-        else:
-            async with httpx.AsyncClient(
-                timeout=120, follow_redirects=True,
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"},
-            ) as c:
-                r = await c.get(file_ref)
-                r.raise_for_status()
-                raw = r.content
-        mime = _detect_mime(raw)
-    else:
-        try:
-            raw = base64.b64decode(file_ref, validate=True)
-        except Exception:
-            raise ValueError("file must be a URL, data URI, or base64 string")
-        mime = _detect_mime(raw)
+        return raw, mime
+    if file_ref.startswith("file://"):
+        with open(file_ref[7:], "rb") as f:
+            raw = f.read()
+        return raw, _detect_mime(raw)
+    if file_ref.startswith(("http://", "https://")):
+        async with httpx.AsyncClient(
+            timeout=120, follow_redirects=True, headers={"User-Agent": _UA},
+        ) as c:
+            r = await c.get(file_ref)
+            r.raise_for_status()
+            raw = r.content
+        return raw, _detect_mime(raw)
+    try:
+        raw = base64.b64decode(file_ref, validate=True)
+    except Exception:
+        raise ValueError("file must be a URL, data URI, or base64 string")
     if len(raw) > MAX_FILE_MB * 1024 * 1024:
         raise ValueError(f"file exceeds {MAX_FILE_MB}MB limit")
-    if mime == "application/octet-stream":
-        mime = _detect_mime(raw)
-    if mime == "application/pdf":
-        return _to_data_uri(raw, mime), raw
-    return _to_data_uri(raw, mime), None
+    return raw, _detect_mime(raw)
 
 
-def _render_page_images(pdf: bytes, dpi: int) -> list:
+def _render_page_images(pdf: bytes, dpi: int, limit: int) -> list:
     doc = fitz.open(stream=pdf, filetype="pdf")
     try:
         zoom = dpi / 72.0
@@ -106,22 +97,22 @@ def _render_page_images(pdf: bytes, dpi: int) -> list:
         pages = []
         for page in doc:
             pix = page.get_pixmap(matrix=mat, alpha=False)
-            pages.append((pix.width, pix.height, pix.samples, pix.n))
+            pages.append((pix.width, pix.height, pix.tobytes("png")))
+            if len(pages) >= limit:
+                break
         return pages
     finally:
         doc.close()
 
 
 def _render_single_image(data: bytes) -> list:
-    from PIL import Image
-
     img = Image.open(io.BytesIO(data)).convert("RGB")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
-    return [(img.width, img.height, buf.getvalue(), 3)]
+    return [(img.width, img.height, buf.getvalue())]
 
 
-def _norm_bbox(bbox, pw: int, ph: int) -> tuple[int, int, int, int] | None:
+def _norm_bbox(bbox, pw: int, ph: int):
     try:
         x1, y1, x2, y2 = [float(v) for v in bbox]
     except Exception:
@@ -137,18 +128,13 @@ def _norm_bbox(bbox, pw: int, ph: int) -> tuple[int, int, int, int] | None:
 
 
 def _crop_png(page_img, rect) -> bytes:
-    from PIL import Image
-
-    pw, ph, samples, n = page_img
+    pw, ph, png = page_img
     x1, y1, x2, y2 = rect
     x1, y1 = max(0, x1), max(0, y1)
     x2, y2 = min(pw, x2), min(ph, y2)
     if x2 - x1 < 2 or y2 - y1 < 2:
         return b""
-    if n == 3:
-        img = Image.frombytes("RGB", (pw, ph), samples)
-    else:
-        img = Image.frombytes("RGBA", (pw, ph), samples).convert("RGB")
+    img = Image.open(io.BytesIO(png))
     buf = io.BytesIO()
     img.crop((x1, y1, x2, y2)).save(buf, format="PNG")
     return buf.getvalue()
@@ -164,26 +150,11 @@ def _iter_blocks(details):
             yield entry
 
 
-def embed_images(md: str, details, source_bytes: bytes | None):
+def embed_images(md: str, details, page_imgs):
     crops: list[str] = []
-    page_imgs = None
-    if source_bytes and source_bytes[:5] == b"%PDF-":
-        try:
-            page_imgs = _render_page_images(source_bytes, PDF_DPI)
-        except Exception:
-            page_imgs = None
-    elif source_bytes:
-        try:
-            page_imgs = _render_single_image(source_bytes)
-        except Exception:
-            page_imgs = None
-    if page_imgs is None:
-        return md, crops
-
-    blocks = [b for b in _iter_blocks(details) if b.get("label") == "image" and b.get("bbox_2d")]
-    per_page = isinstance(details, list) and details and isinstance(details[0], list)
-
     data_uris: list[str] = []
+
+    per_page = isinstance(details, list) and details and isinstance(details[0], list)
     if per_page:
         for pi, page in enumerate(details):
             if pi >= len(page_imgs):
@@ -191,15 +162,17 @@ def embed_images(md: str, details, source_bytes: bytes | None):
             for b in page:
                 if not isinstance(b, dict) or b.get("label") != "image" or not b.get("bbox_2d"):
                     continue
-                rect = _norm_bbox(b["bbox_2d"], *page_imgs[pi][:2])
+                rect = _norm_bbox(b["bbox_2d"], page_imgs[pi][0], page_imgs[pi][1])
                 if not rect:
                     continue
                 png = _crop_png(page_imgs[pi], rect)
                 if png:
                     data_uris.append(_to_data_uri(png, "image/png"))
     else:
-        for b in blocks:
-            rect = _norm_bbox(b["bbox_2d"], *page_imgs[0][:2])
+        for b in _iter_blocks(details):
+            if b.get("label") != "image" or not b.get("bbox_2d"):
+                continue
+            rect = _norm_bbox(b["bbox_2d"], page_imgs[0][0], page_imgs[0][1])
             if not rect:
                 continue
             png = _crop_png(page_imgs[0], rect)
@@ -227,6 +200,10 @@ def embed_images(md: str, details, source_bytes: bytes | None):
         new_md = md + "\n\n" + "\n\n".join(f"![image]({u})" for u in data_uris)
         crops = list(data_uris)
     return new_md, crops
+
+
+def _to_data_uri(data: bytes, mime: str) -> str:
+    return f"data:{mime};base64,{base64.b64encode(data).decode()}"
 
 
 @app.get("/health")
@@ -257,25 +234,44 @@ async def layout_parsing(request: Request):
         return _err(400, "Field 'file' is required (URL, data URI, or base64)")
 
     try:
-        data_uri, source_bytes = await _resolve_input(file_ref)
+        raw, mime = await _fetch_input(file_ref)
     except ValueError as e:
         return _err(400, str(e))
+    except httpx.HTTPStatusError as e:
+        return _err(400, f"Could not fetch file: HTTP {e.response.status_code}")
     except Exception as e:
         return _err(400, f"Could not fetch file: {e}")
 
-    if source_bytes and source_bytes[:5] == b"%PDF-":
-        start = body.get("start_page_id")
-        end = body.get("end_page_id")
-        if start or end:
+    if len(raw) > MAX_FILE_MB * 1024 * 1024:
+        return _err(400, f"file exceeds {MAX_FILE_MB}MB limit")
+
+    truncated = False
+    if mime == "application/pdf":
+        if body.get("start_page_id") or body.get("end_page_id"):
             try:
-                source_bytes = _slice_pdf(source_bytes, int(start or 1), int(end or 10**9))
-                data_uri = _to_data_uri(source_bytes, "application/pdf")
+                raw = _slice_pdf(raw, int(body.get("start_page_id") or 1), int(body.get("end_page_id") or 10**9))
             except ValueError as e:
                 return _err(400, str(e))
             except Exception:
                 return _err(400, "Could not slice PDF pages")
+        try:
+            page_imgs = _render_page_images(raw, PDF_DPI, PAGE_LIMIT)
+        except Exception:
+            return _err(400, "Could not render PDF pages")
+        if not page_imgs:
+            return _err(400, "PDF contains no readable pages")
+        truncated = len(page_imgs) >= PAGE_LIMIT
+    else:
+        try:
+            page_imgs = _render_single_image(raw)
+        except Exception:
+            return _err(400, "File is not a readable PDF or image")
 
-    payload = {"file": data_uri, "model": "glm-ocr"}
+    payload = {
+        "images": [_to_data_uri(png, "image/png") for _, _, png in page_imgs],
+        "model": "glm-ocr",
+    }
+
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as c:
             r = await c.post(UPSTREAM_URL, json=payload)
@@ -295,13 +291,21 @@ async def layout_parsing(request: Request):
     md = resp.get("md_results") or resp.get("markdown_result") or ""
     details = resp.get("layout_details") or resp.get("json_result") or []
 
-    if EMBED_IMAGES and md and source_bytes:
+    resp["data_info"] = {
+        "num_pages": len(page_imgs),
+        "pages": [{"width": w, "height": h} for w, h, _ in page_imgs],
+    }
+
+    if EMBED_IMAGES and md:
         try:
-            md, crops = embed_images(md, details, source_bytes)
+            md, crops = embed_images(md, details, page_imgs)
             resp["md_results"] = md
             resp["crop_images"] = crops
         except Exception:
             pass
+
+    if truncated:
+        resp["pages_truncated"] = True
 
     resp["model"] = body.get("model", "glm-ocr")
     resp["request_id"] = body.get("request_id") or f"req_{uuid.uuid4().hex[:24]}"
