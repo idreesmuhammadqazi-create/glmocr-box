@@ -75,7 +75,10 @@ async def _resolve_input(file_ref: str) -> tuple[str, bytes | None]:
             with open(file_ref[7:], "rb") as f:
                 raw = f.read()
         else:
-            async with httpx.AsyncClient(timeout=120, follow_redirects=True) as c:
+            async with httpx.AsyncClient(
+                timeout=120, follow_redirects=True,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"},
+            ) as c:
                 r = await c.get(file_ref)
                 r.raise_for_status()
                 raw = r.content
