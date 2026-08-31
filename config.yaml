@@ -1,0 +1,22 @@
+pipeline:
+  maas:
+    enabled: false
+  ocr_api:
+    api_url: http://127.0.0.1:8080/v1/chat/completions
+    api_key: local
+    model: glm-ocr
+    api_mode: openai
+    connect_timeout: 30
+    request_timeout: 300
+  layout:
+    device: cpu
+    batch_size: 1
+  page_loader:
+    pdf_dpi: 200
+  max_workers: 2
+server:
+  host: 127.0.0.1
+  port: 5002
+  debug: false
+logging:
+  level: INFO
