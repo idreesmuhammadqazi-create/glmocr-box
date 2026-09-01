@@ -21,30 +21,34 @@ if [ ! -f "$MMPROJ_FILE" ]; then
   download "$MMPROJ_FILE" "$HF_BASE/mmproj-GLM-OCR-$QUANT.gguf"
 fi
 
-echo "[entrypoint] Starting llama-server (Vulkan) on :8080 ..."
-/app/llama/llama-server \
-  -m "$MODEL_FILE" \
-  --mmproj "$MMPROJ_FILE" \
-  --host 127.0.0.1 --port 8080 \
-  -c "${CONTEXT:-8192}" \
-  -ngl "${N_GPU_LAYERS:-99}" \
-  --alias glm-ocr \
-  --flash-attn off -fit off \
-  --threads "${THREADS:-4}" \
-  > /tmp/llama-server.log 2>&1 &
+if [ "${SKIP_LLAMA:-0}" != "1" ]; then
+  echo "[entrypoint] Starting llama-server (Vulkan) on :8080 ..."
+  /app/llama/llama-server \
+    -m "$MODEL_FILE" \
+    --mmproj "$MMPROJ_FILE" \
+    --host 127.0.0.1 --port 8080 \
+    -c "${CONTEXT:-8192}" \
+    -ngl "${N_GPU_LAYERS:-99}" \
+    --alias glm-ocr \
+    --flash-attn off -fit off \
+    --threads "${THREADS:-4}" \
+    > /tmp/llama-server.log 2>&1 &
 
-for i in $(seq 1 120); do
-  if curl -sf http://127.0.0.1:8080/health > /dev/null 2>&1; then
-    echo "[entrypoint] llama-server is up"
-    break
-  fi
-  if ! kill -0 $! 2> /dev/null; then
-    echo "[entrypoint] llama-server failed to start:"
-    tail -30 /tmp/llama-server.log
-    exit 1
-  fi
-  sleep 2
-done
+  for i in $(seq 1 120); do
+    if curl -sf http://127.0.0.1:8080/health > /dev/null 2>&1; then
+      echo "[entrypoint] llama-server is up"
+      break
+    fi
+    if ! kill -0 $! 2> /dev/null; then
+      echo "[entrypoint] llama-server failed to start:"
+      tail -30 /tmp/llama-server.log
+      exit 1
+    fi
+    sleep 2
+  done
+else
+  echo "[entrypoint] SKIP_LLAMA=1 - expecting an external OCR server on :8080"
+fi
 
 echo "[entrypoint] Starting glmocr pipeline server on :5002 ..."
 python -m glmocr.server --config /app/config.yaml > /tmp/glmocr-server.log 2>&1 &
