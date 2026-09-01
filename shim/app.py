@@ -12,6 +12,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 UPSTREAM_URL = os.environ.get("UPSTREAM_URL", "http://127.0.0.1:5002/glmocr/parse")
+UPSTREAM_MODE = os.environ.get("UPSTREAM_MODE", "local")  # "local" | "zai"
+ZAI_API_URL = os.environ.get("ZAI_API_URL", "https://api.z.ai/api/paas/v4/layout_parsing")
+ZAI_API_KEY = os.environ.get("ZAI_API_KEY", "")
 API_KEY = os.environ.get("OCR_API_KEY", "")
 EMBED_IMAGES = os.environ.get("EMBED_IMAGES", "true").lower() in ("1", "true", "yes")
 PDF_DPI = int(os.environ.get("PDF_DPI", "200"))
@@ -117,7 +120,10 @@ def _norm_bbox(bbox, pw: int, ph: int):
         x1, y1, x2, y2 = [float(v) for v in bbox]
     except Exception:
         return None
-    if max(abs(x1), abs(y1), abs(x2), abs(y2)) <= 1000.0:
+    m = max(abs(x1), abs(y1), abs(x2), abs(y2))
+    if m <= 1.5:
+        return (int(x1 * pw), int(y1 * ph), int(x2 * pw), int(y2 * ph))
+    if m <= 1000.0:
         return (
             int(x1 / 1000.0 * pw),
             int(y1 / 1000.0 * ph),
@@ -246,10 +252,12 @@ async def layout_parsing(request: Request):
         return _err(400, f"file exceeds {MAX_FILE_MB}MB limit")
 
     truncated = False
+    sliced = False
     if mime == "application/pdf":
         if body.get("start_page_id") or body.get("end_page_id"):
             try:
                 raw = _slice_pdf(raw, int(body.get("start_page_id") or 1), int(body.get("end_page_id") or 10**9))
+                sliced = True
             except ValueError as e:
                 return _err(400, str(e))
             except Exception:
@@ -267,14 +275,29 @@ async def layout_parsing(request: Request):
         except Exception:
             return _err(400, "File is not a readable PDF or image")
 
-    payload = {
-        "images": [_to_data_uri(png, "image/png") for _, _, png in page_imgs],
-        "model": "glm-ocr",
-    }
+    if UPSTREAM_MODE == "zai":
+        if not ZAI_API_KEY:
+            return _err(503, "Server not configured: ZAI_API_KEY missing (UPSTREAM_MODE=zai)")
+        send_body = {"model": body.get("model", "glm-ocr"), "file": _to_data_uri(raw, mime)}
+        if body.get("start_page_id") and not sliced:
+            send_body["start_page_id"] = int(body["start_page_id"])
+        if body.get("end_page_id") and not sliced:
+            send_body["end_page_id"] = int(body["end_page_id"])
+        if body.get("request_id"):
+            send_body["request_id"] = body["request_id"]
+        send_url = ZAI_API_URL
+        send_headers = {"Authorization": f"Bearer {ZAI_API_KEY}"}
+    else:
+        send_body = {
+            "images": [_to_data_uri(png, "image/png") for _, _, png in page_imgs],
+            "model": "glm-ocr",
+        }
+        send_url = UPSTREAM_URL
+        send_headers = None
 
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as c:
-            r = await c.post(UPSTREAM_URL, json=payload)
+            r = await c.post(send_url, json=send_body, headers=send_headers)
     except httpx.TimeoutException:
         return _err(504, "Upstream OCR pipeline timed out")
     except Exception as e:
@@ -291,10 +314,12 @@ async def layout_parsing(request: Request):
     md = resp.get("md_results") or resp.get("markdown_result") or ""
     details = resp.get("layout_details") or resp.get("json_result") or []
 
-    resp["data_info"] = {
-        "num_pages": len(page_imgs),
-        "pages": [{"width": w, "height": h} for w, h, _ in page_imgs],
-    }
+    zai_info = resp.get("data_info") if isinstance(resp.get("data_info"), dict) else None
+    if not (zai_info and zai_info.get("pages")):
+        resp["data_info"] = {
+            "num_pages": len(page_imgs),
+            "pages": [{"width": w, "height": h} for w, h, _ in page_imgs],
+        }
 
     if EMBED_IMAGES and md:
         try:
