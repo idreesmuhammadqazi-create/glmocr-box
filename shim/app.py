@@ -1,6 +1,13 @@
 import base64
 import io
 import os
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 import re
 import time
 import uuid
