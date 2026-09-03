@@ -1,9 +1,0 @@
-services:
-  glm-ocr:
-    devices:
-      - /dev/dri:/dev/dri
-    group_add:
-      - video
-      - render
-    environment:
-      N_GPU_LAYERS: ${N_GPU_LAYERS:-99}
