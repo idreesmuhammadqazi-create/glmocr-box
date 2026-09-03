@@ -1,0 +1,144 @@
+import asyncio
+import sys
+import tempfile
+from pathlib import Path
+
+import pymupdf as fitz
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from ocrpdf.client import OcrClient
+from ocrpdf.config import Settings
+from ocrpdf.pipeline import PageCache, process_pdf
+from ocrpdf.render import detect_table_rects
+from ocrpdf.splice import SENTINEL, splice_tables
+
+
+def make_sample_pdf(path: Path) -> None:
+    doc = fitz.open()
+    page = doc.new_page(width=595, height=842)
+    page.insert_text((72, 80), "Marking Scheme — Paper 1", fontname="helv", fontsize=16)
+    page.insert_text((72, 110), "Question 1(a)(i): Answer with formula", fontname="helv", fontsize=11)
+
+    x0, y0, x1, y1 = 72, 140, 520, 400
+    cols = [x0, x0 + 160, x0 + 320, x1]
+    rows = [y0, y0 + 65, y0 + 130, y0 + 195, y1]
+    for x in cols:
+        page.draw_line(fitz.Point(x, y0), fitz.Point(x, y1))
+    for y in rows:
+        page.draw_line(fitz.Point(x0, y), fitz.Point(x1, y))
+
+    cell = lambda cx, cy, s: page.insert_text((cx, cy), s, fontname="helv", fontsize=10)
+    cell(cols[0] + 8, rows[0] + 40, "1(a)(i)")
+    cell(cols[1] + 8, rows[0] + 40, "M1: x^2 + 2x + 1 = 0")
+    cell(cols[2] + 8, rows[0] + 40, "(x+1)(x+1) = 0")
+    cell(cols[3] + 8, rows[0] + 40, "[2]")
+    cell(cols[0] + 8, rows[1] + 40, "1(a)(ii)")
+    cell(cols[1] + 8, rows[1] + 40, "A1: x = -1")
+    cell(cols[2] + 8, rows[1] + 40, "sqrt(2)/2 or 1/2")
+    cell(cols[3] + 8, rows[1] + 40, "[1]")
+    cell(cols[0] + 8, rows[2] + 40, "1(b)")
+    cell(cols[1] + 8, rows[2] + 40, "B1: dy/dx = 3x^2")
+    cell(cols[2] + 8, rows[2] + 40, "integral of f(x)")
+    cell(cols[3] + 8, rows[2] + 40, "[3]")
+    cell(cols[0] + 8, rows[3] + 40, "1(c)")
+    cell(cols[1] + 8, rows[3] + 40, "M1: e^(2t) > 0")
+    cell(cols[2] + 8, rows[3] + 40, "alpha + beta")
+    cell(cols[3] + 8, rows[3] + 40, "[1]")
+
+    page.insert_text((72, 450), "Notes: award marks as shown in the table above.", fontname="helv", fontsize=11)
+    doc.save(path)
+    doc.close()
+
+
+def test_detection():
+    with tempfile.TemporaryDirectory() as tmp:
+        pdf = Path(tmp) / "sample.pdf"
+        make_sample_pdf(pdf)
+        doc = fitz.open(pdf)
+        rects = detect_table_rects(doc[0])
+        doc.close()
+        assert len(rects) == 1, f"expected 1 table rect, got {len(rects)}: {rects}"
+        r = rects[0]
+        assert abs(r.x0 - 72) < 15 and abs(r.y0 - 140) < 15, f"rect off: {r}"
+        assert abs(r.x1 - 520) < 15 and abs(r.y1 - 400) < 15, f"rect off: {r}"
+        print("test_detection OK:", rects[0])
+
+
+def test_splice_with_sentinels():
+    page_md = (
+        "Intro text.\n"
+        f"{SENTINEL}\n"
+        "| Q | Ans |\n|---|---|\n| 1 | mangled $$ \n\nAfter table text.\n"
+        f"{SENTINEL}\n"
+        "| Q | B |\n|---|---|\n| 2 | mangled2 |"
+    )
+    rescued = [
+        "| Q | Ans |\n|---|---|\n| 1 | $x^2 + 2x + 1 = 0$ |",
+        "| Q | B |\n|---|---|\n| 2 | $\\frac{1}{2}$ |",
+    ]
+    out, n = splice_tables(page_md, rescued)
+    assert n == 2, f"expected 2 replacements, got {n}"
+    assert "$x^2 + 2x + 1 = 0$" in out and "mangled" not in out
+    print("test_splice_with_sentinels OK")
+
+
+def test_splice_no_sentinels():
+    page_md = "Text.\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\nTrailing text."
+    rescued = ["| A | B |\n|---|---|\n| 1 | $e^{2t}$ |"]
+    out, n = splice_tables(page_md, rescued)
+    assert n == 1 and "$e^{2t}$" in out and "| 1 | 2 |" not in out
+    print("test_splice_no_sentinels OK")
+
+
+def test_splice_fallback_append():
+    page_md = "No tables here."
+    rescued = ["| A | B |\n|---|---|\n| 1 | 2 |"]
+    out, n = splice_tables(page_md, rescued)
+    assert n == 0 and "rescued tables" in out and "| 1 | 2 |" in out
+    print("test_splice_fallback_append OK")
+
+
+class MockClient:
+    def __init__(self):
+        self.calls = []
+
+    async def ocr_image(self, png: bytes, prompt: str) -> str:
+        self.calls.append(prompt)
+        if "ENTIRE page" in prompt:
+            return (
+                "Marking Scheme — Paper 1\n\n"
+                f"{SENTINEL}\n\n"
+                "| Q | Working | Answer | Marks |\n|---|---|---|---|\n"
+                "| 1(a)(i) | (mangled) | (mangled) | [2] |\n\n"
+                "Notes: award marks as shown in the table above."
+            )
+        return (
+            "| Q | Working | Answer | Marks |\n|---|---|---|---|\n"
+            "| 1(a)(i) | $(x+1)(x+1) = 0$ | $x = -1$ | [2] |"
+        )
+
+
+def test_pipeline_end_to_end():
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        pdf = tmp / "sample.pdf"
+        make_sample_pdf(pdf)
+        settings = Settings(api_key="test", base_url="http://localhost", model="glm-ocr")
+        out = tmp / "sample.md"
+        asyncio.run(process_pdf(pdf, out, settings, MockClient(), PageCache(tmp / "cache"), dry_run=False))
+        text = out.read_text(encoding="utf-8")
+        assert "===== Page 1 =====" in text
+        assert "$(x+1)(x+1) = 0$" in text
+        assert "(mangled)" not in text
+        assert "Notes: award marks" in text
+        print("test_pipeline_end_to_end OK")
+
+
+if __name__ == "__main__":
+    test_splice_with_sentinels()
+    test_splice_no_sentinels()
+    test_splice_fallback_append()
+    test_detection()
+    test_pipeline_end_to_end()
+    print("ALL TESTS PASSED")

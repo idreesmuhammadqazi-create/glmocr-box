@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+.ocrpdf-cache/
+out/
+*.md
+!README.md

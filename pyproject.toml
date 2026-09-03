@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocrpdf"
+version = "0.1.0"
+description = "OCR PDFs to Markdown with GLM-OCR via Z.ai, with table rescue for formula-dense tables"
+requires-python = ">=3.10"
+dependencies = [
+    "pymupdf>=1.24",
+    "openai>=1.40",
+    "python-dotenv>=1.0",
+    "numpy>=1.26",
+    "opencv-python-headless>=4.9",
+]
+
+[project.scripts]
+ocrpdf = "ocrpdf.__main__:main"
+
+[tool.setuptools]
+packages = ["ocrpdf"]
