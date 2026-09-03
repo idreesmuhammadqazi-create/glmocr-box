@@ -23,6 +23,35 @@ def render_clip_png(page: fitz.Page, rect: fitz.Rect, dpi: int) -> bytes:
     return pix.tobytes("png")
 
 
+def table_rects_from_elements(elements, page_rect: fitz.Rect) -> List[fitz.Rect]:
+    rects = []
+    for el in elements or []:
+        if not isinstance(el, dict) or el.get("label") != "table":
+            continue
+        bb = el.get("bbox_2d")
+        if not bb or len(bb) != 4:
+            continue
+        w = el.get("width") or page_rect.width
+        h = el.get("height") or page_rect.height
+        sx = page_rect.width / w
+        sy = page_rect.height / h
+        r = fitz.Rect(bb[0] * sx, bb[1] * sy, bb[2] * sx, bb[3] * sy) & page_rect
+        if r.is_empty or r.width < MIN_TABLE_WIDTH_PT or r.height < MIN_TABLE_HEIGHT_PT:
+            continue
+        rects.append(r)
+    rects.sort(key=lambda r: (r.y0, r.x0))
+    return rects
+
+
+def pad_rect(rect: fitz.Rect, page_rect: fitz.Rect) -> fitz.Rect:
+    return fitz.Rect(
+        rect.x0 - PAD_FRACTION * page_rect.width,
+        rect.y0 - PAD_FRACTION * page_rect.height,
+        rect.x1 + PAD_FRACTION * page_rect.width,
+        rect.y1 + PAD_FRACTION * page_rect.height,
+    ) & page_rect
+
+
 def detect_table_rects(page: fitz.Page) -> List[fitz.Rect]:
     rects = _rects_from_find_tables(page)
     if not rects:
@@ -31,10 +60,7 @@ def detect_table_rects(page: fitz.Page) -> List[fitz.Rect]:
     page_area = abs(page.rect)
     result = []
     for r in rects:
-        r = fitz.Rect(r.x0 - PAD_FRACTION * page.rect.width,
-                      r.y0 - PAD_FRACTION * page.rect.height,
-                      r.x1 + PAD_FRACTION * page.rect.width,
-                      r.y1 + PAD_FRACTION * page.rect.height) & page.rect
+        r = pad_rect(r, page.rect)
         if r.is_empty:
             continue
         if r.width < MIN_TABLE_WIDTH_PT or r.height < MIN_TABLE_HEIGHT_PT:

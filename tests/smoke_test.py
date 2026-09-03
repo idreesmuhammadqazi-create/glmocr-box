@@ -103,19 +103,27 @@ class MockClient:
     def __init__(self):
         self.calls = []
 
-    async def ocr_image(self, png: bytes, prompt: str) -> str:
-        self.calls.append(prompt)
-        if "ENTIRE page" in prompt:
-            return (
-                "Marking Scheme — Paper 1\n\n"
-                f"{SENTINEL}\n\n"
-                "| Q | Working | Answer | Marks |\n|---|---|---|---|\n"
-                "| 1(a)(i) | (mangled) | (mangled) | [2] |\n\n"
-                "Notes: award marks as shown in the table above."
+    async def parse_image(self, png: bytes, kind: str = "page"):
+        self.calls.append(kind)
+        if kind == "page":
+            from ocrpdf.client import LayoutResult
+            return LayoutResult(
+                md=(
+                    "Marking Scheme — Paper 1\n\n"
+                    '<table border="1"><tr><td>Q</td><td>Working</td></tr>'
+                    "<tr><td>1(a)(i)</td><td>(mangled)</td></tr></table>\n\n"
+                    "Notes: award marks as shown in the table above."
+                ),
+                elements=[
+                    {"label": "text", "bbox_2d": [72, 80, 300, 100], "width": 595, "height": 842},
+                    {"label": "table", "bbox_2d": [72, 140, 520, 400], "width": 595, "height": 842},
+                ],
             )
-        return (
-            "| Q | Working | Answer | Marks |\n|---|---|---|---|\n"
-            "| 1(a)(i) | $(x+1)(x+1) = 0$ | $x = -1$ | [2] |"
+        from ocrpdf.client import LayoutResult
+        return LayoutResult(
+            md=('<table border="1"><tr><td>Q</td><td>Working</td></tr>'
+                "<tr><td>1(a)(i)</td><td>$(x+1)(x+1) = 0$</td></tr></table>"),
+            elements=[{"label": "table", "bbox_2d": [0, 0, 100, 100], "width": 100, "height": 100}],
         )
 
 

@@ -9,7 +9,7 @@ description = "OCR PDFs to Markdown with GLM-OCR via Z.ai, with table rescue for
 requires-python = ">=3.10"
 dependencies = [
     "pymupdf>=1.24",
-    "openai>=1.40",
+    "httpx>=0.27",
     "python-dotenv>=1.0",
     "numpy>=1.26",
     "opencv-python-headless>=4.9",

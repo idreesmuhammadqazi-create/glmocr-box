@@ -77,11 +77,14 @@ def main(argv=None) -> int:
 
     async def run():
         client = OcrClient(settings)
-        cache = PageCache(Path(args.cache_dir), enabled=not args.no_cache)
-        results = []
-        for pdf, md_path in jobs:
-            results.append(await process_pdf(pdf, md_path, settings, client, cache, dry_run=args.dry_run))
-        return results
+        try:
+            cache = PageCache(Path(args.cache_dir), enabled=not args.no_cache)
+            results = []
+            for pdf, md_path in jobs:
+                results.append(await process_pdf(pdf, md_path, settings, client, cache, dry_run=args.dry_run))
+            return results
+        finally:
+            await client.close()
 
     results = asyncio.run(run())
     for r in results:

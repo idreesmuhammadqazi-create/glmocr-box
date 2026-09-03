@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import json
 import logging
 import time
 from pathlib import Path
@@ -9,9 +10,13 @@ import pymupdf as fitz
 
 from .client import OcrClient
 from .config import Settings
-from .prompts import PAGE_PROMPT, TABLE_PROMPT
-from .render import detect_table_rects, render_clip_png, render_page_png
-from .splice import SENTINEL, splice_tables, strip_fences
+from .render import (
+    detect_table_rects,
+    render_clip_png,
+    render_page_png,
+    table_rects_from_elements,
+)
+from .splice import splice_tables
 
 log = logging.getLogger("ocrpdf")
 
@@ -39,6 +44,18 @@ class PageCache:
         if not self.enabled:
             return
         self._path(pdf_hash, name).write_text(text, encoding="utf-8")
+
+    def get_json(self, pdf_hash: str, name: str):
+        raw = self.get(pdf_hash, name)
+        if raw is None:
+            return None
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return None
+
+    def put_json(self, pdf_hash: str, name: str, obj) -> None:
+        self.put(pdf_hash, name, json.dumps(obj))
 
 
 async def process_pdf(
@@ -82,17 +99,34 @@ async def _process_page(
     dry_run: bool,
 ) -> str:
     t0 = time.time()
-    rects = detect_table_rects(page)
     page_png = render_page_png(page, settings.page_dpi)
+    stem = f"page_{idx + 1:03d}_d{settings.page_dpi}_{settings.model}"
+    page_md = cache.get(pdf_hash, stem + ".md")
+    cached_rects = cache.get_json(pdf_hash, stem + ".bboxes.json")
 
-    cache_name = f"page_{idx + 1:03d}_d{settings.page_dpi}_{settings.model}.md"
-    page_md = cache.get(pdf_hash, cache_name)
     if page_md is None:
         if dry_run:
+            rects = detect_table_rects(page)
             log.info("[page %d] dry run: %d table region(s) detected", idx + 1, len(rects))
-            return f"_(dry run: page {idx + 1}, {len(rects)} table region(s) detected at {', '.join(str(r) for r in rects)})_"
-        page_md = strip_fences(await client.ocr_image(page_png, PAGE_PROMPT))
-        cache.put(pdf_hash, cache_name, page_md)
+            return (f"_(dry run: page {idx + 1}, {len(rects)} table region(s) detected "
+                    f"at {', '.join(str(r) for r in rects)})_")
+        result = await client.parse_image(page_png, kind="page")
+        page_md = result.md
+        cache.put(pdf_hash, stem + ".md", page_md)
+        rects = table_rects_from_elements(result.elements, page.rect)
+        cache.put_json(pdf_hash, stem + ".bboxes.json", [[r.x0, r.y0, r.x1, r.y1] for r in rects])
+        if not rects:
+            rects = detect_table_rects(page)
+            if rects:
+                log.info("[page %d] model found no tables; geometric fallback found %d", idx + 1, len(rects))
+    else:
+        if cached_rects:
+            rects = [fitz.Rect(*bb) & page.rect for bb in cached_rects]
+        else:
+            rects = detect_table_rects(page)
+
+    if dry_run:
+        return page_md
 
     rescued = []
     for k, rect in enumerate(rects):
@@ -100,14 +134,16 @@ async def _process_page(
         table_md = cache.get(pdf_hash, rname)
         if table_md is None:
             clip_png = render_clip_png(page, rect, settings.table_dpi)
-            table_md = strip_fences(await client.ocr_image(clip_png, TABLE_PROMPT))
+            result = await client.parse_image(clip_png, kind="table")
+            table_md = result.md
             cache.put(pdf_hash, rname, table_md)
         rescued.append(table_md)
 
     if rescued:
         page_md, n_replaced = splice_tables(page_md, rescued)
         if n_replaced < len(rescued):
-            log.warning("[page %d] only %d/%d rescued tables spliced in place", idx + 1, n_replaced, len(rescued))
+            log.warning("[page %d] only %d/%d rescued tables spliced in place",
+                        idx + 1, n_replaced, len(rescued))
 
     log.info("[page %d] done in %.1fs (%d table regions)", idx + 1, time.time() - t0, len(rects))
     return page_md
