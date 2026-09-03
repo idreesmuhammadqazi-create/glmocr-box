@@ -10,6 +10,7 @@ import pymupdf as fitz
 
 from .client import OcrClient
 from .config import Settings
+from .mathmd import mathify
 from .render import (
     detect_table_rects,
     render_clip_png,
@@ -144,6 +145,8 @@ async def _process_page(
         if n_replaced < len(rescued):
             log.warning("[page %d] only %d/%d rescued tables spliced in place",
                         idx + 1, n_replaced, len(rescued))
+
+    page_md = mathify(page_md)
 
     log.info("[page %d] done in %.1fs (%d table regions)", idx + 1, time.time() - t0, len(rects))
     return page_md

@@ -1,4 +1,5 @@
 import asyncio
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -9,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from ocrpdf.client import OcrClient
 from ocrpdf.config import Settings
+from ocrpdf.mathmd import cleanup_math, html_tables_to_pipes, mathify
 from ocrpdf.pipeline import PageCache, process_pdf
 from ocrpdf.render import detect_table_rects
 from ocrpdf.splice import SENTINEL, splice_tables
@@ -99,6 +101,44 @@ def test_splice_fallback_append():
     print("test_splice_fallback_append OK")
 
 
+def test_html_table_to_pipes():
+    md = (
+        "Intro\n\n"
+        '<table border="1"><tr><td>Q</td><td>Answer</td><td>Marks</td></tr>'
+        "<tr><td>7(a)</td><td>-3&lt;x≤2</td><td>2</td></tr>"
+        "<tr><td>9</td><td>M1 for $ k &lt; 5 $<br>OR<br>M2 for $a\\times b$</td><td>1</td></tr>"
+        "</table>\n\nEnd"
+    )
+    out = html_tables_to_pipes(md)
+    assert "<table" not in out
+    seps = [ln for ln in out.splitlines() if re.fullmatch(r"\|(-{3}\|)+", ln)]
+    assert len(seps) == 1
+    assert "| 7(a) | -3<x≤2 | 2 |" in out
+    assert "M1 for $ k < 5 $<br>OR<br>M2 for $a\\times b$ | 1 |" in out
+
+
+def test_cleanup_math_entities_and_unicode():
+    md = "text $ -3&lt;x≤2 $ more and `code $x&lt;1$ stays` end $ \\frac{1}{2}\\times5 $"
+    out = cleanup_math(md)
+    assert "$-3<x\\le2$" in out.replace(" ", "").replace("$ -3", "$-3") or "$-3<x\\le2$" in out.replace(" ", "")
+    assert "&lt;" not in out.split("`")[0]
+    assert "≤" not in out
+    assert "code $x&lt;1$ stays" in out
+
+
+def test_mathify_complex_table_kept():
+    md = '<table><tr><td rowspan="2">a</td><td>b</td></tr><tr><td>c</td></tr></table>'
+    out = mathify(md)
+    assert "<table" in out
+
+
+def test_mathify_simple_pipeline():
+    md = '<table><tr><td>x</td><td>$\\frac{1}{2}$ &amp; more</td></tr></table>'
+    out = mathify(md)
+    assert "<table" not in out
+    assert "&amp;" not in out
+
+
 class MockClient:
     def __init__(self):
         self.calls = []
@@ -147,6 +187,10 @@ if __name__ == "__main__":
     test_splice_with_sentinels()
     test_splice_no_sentinels()
     test_splice_fallback_append()
+    test_html_table_to_pipes()
+    test_cleanup_math_entities_and_unicode()
+    test_mathify_complex_table_kept()
+    test_mathify_simple_pipeline()
     test_detection()
     test_pipeline_end_to_end()
     print("ALL TESTS PASSED")
