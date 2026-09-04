@@ -23,6 +23,8 @@ def main(argv=None) -> int:
     parser.add_argument("--no-cache", action="store_true", help="Ignore/overwrite cached page results")
     parser.add_argument("--cache-dir", default=".ocrpdf-cache", help="Cache directory (default .ocrpdf-cache)")
     parser.add_argument("--dry-run", action="store_true", help="Render + table detection only, no API calls")
+    parser.add_argument("--verify", action="store_true", help="After writing output, verify all math with KaTeX and fail on errors")
+    parser.add_argument("--no-katex-repair", action="store_true", help="Skip the KaTeX-driven math repair pass")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -81,7 +83,9 @@ def main(argv=None) -> int:
             cache = PageCache(Path(args.cache_dir), enabled=not args.no_cache)
             results = []
             for pdf, md_path in jobs:
-                results.append(await process_pdf(pdf, md_path, settings, client, cache, dry_run=args.dry_run))
+                r = await process_pdf(pdf, md_path, settings, client, cache, dry_run=args.dry_run,
+                                      repair=not args.no_katex_repair)
+                results.append(r)
             return results
         finally:
             await client.close()
@@ -89,6 +93,27 @@ def main(argv=None) -> int:
     results = asyncio.run(run())
     for r in results:
         print(r["out"])
+        k = r.get("katex") or {}
+        if k.get("checked"):
+            print(f"  katex: {k['checked']} segments, {k['repaired']} repaired, {k['failed']} failed")
+
+    if args.verify:
+        from .katex_repair import KatexRepairer
+        rep = KatexRepairer()
+        if not rep.available:
+            print(f"verification unavailable: {rep.disabled_reason}", file=sys.stderr)
+            return 1
+        bad = 0
+        for r in results:
+            md = Path(r["out"]).read_text(encoding="utf-8")
+            failures = asyncio.run(rep.verify_markdown(md))
+            for tex, e in failures:
+                bad += 1
+                print(f"VERIFY FAIL {r['out']}: {e[:120]}\n  tex: {tex[:120]}", file=sys.stderr)
+        if bad:
+            print(f"verification FAILED: {bad} bad segment(s)", file=sys.stderr)
+            return 1
+        print("verification PASSED: all math renders with KaTeX")
     return 0
 
 

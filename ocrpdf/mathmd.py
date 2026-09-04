@@ -76,6 +76,8 @@ _FENCE_SPLIT = re.compile(r"^(\s*```.*?\n[\s\S]*?```\s*)$", re.MULTILINE)
 _MATH_PATTERN = re.compile(r"\$\$([\s\S]+?)\$\$|(?<!\$)\$((?:[^$\n\\]|\\.)+?)(?<!\\)\$(?!\$)")
 _CODE_SPAN = re.compile(r"`[^`\n]+`")
 _TABLE_BLOCK = re.compile(r"<table\b[\s\S]*?</table\s*>", re.IGNORECASE)
+_INLINE_PAREN = re.compile(r"\\\(([\s\S]+?)\\\)")
+_DISPLAY_BRACKET = re.compile(r"\\\[([\s\S]+?)\\\]")
 
 
 class _TableParser(HTMLParser):
@@ -173,6 +175,27 @@ def _outside_fences(md: str):
     return [p for p in _FENCE_SPLIT.split(md) if p]
 
 
+def iter_math_segments(md: str):
+    for part_start, part in _fenced_parts(md):
+        if part.lstrip().startswith("```"):
+            continue
+        for m in _MATH_PATTERN.finditer(part):
+            inner = m.group(1) if m.group(1) is not None else (m.group(2) or "")
+            display = m.group(1) is not None
+            yield part_start + m.start(), part_start + m.end(), inner, display
+
+
+def _fenced_parts(md: str):
+    pos = 0
+    for m in _FENCE_SPLIT.finditer(md):
+        if m.start() > pos:
+            yield pos, md[pos:m.start()]
+        yield m.start(), m.group(0)
+        pos = m.end()
+    if pos < len(md):
+        yield pos, md[pos:]
+
+
 def html_tables_to_pipes(md: str) -> str:
     result = []
     for part in _outside_fences(md):
@@ -197,8 +220,6 @@ def _balance_braces(text: str) -> str:
             out.append(ch)
         else:
             out.append(ch)
-    if depth > 0:
-        out.append("}" * depth)
     return "".join(out)
 
 
@@ -239,6 +260,8 @@ def _clean_segment(segment: str) -> str:
 
 
 def cleanup_math(md: str) -> str:
+    md = _INLINE_PAREN.sub(lambda m: "$" + m.group(1) + "$", md)
+    md = _DISPLAY_BRACKET.sub(lambda m: "$$" + m.group(1) + "$$", md)
     result = []
     for part in _outside_fences(md):
         if part.lstrip().startswith("```"):

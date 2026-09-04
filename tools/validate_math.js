@@ -1,5 +1,13 @@
 const fs = require("fs");
-const katex = require("katex");
+const path = require("path");
+function loadKatex() {
+  try { return require("katex"); }
+  catch (e) {
+    const dir = process.env.KATEX_NODE_MODULES || path.join(process.cwd(), "node_modules");
+    return require(path.join(dir, "katex"));
+  }
+}
+const katex = loadKatex();
 
 const md = fs.readFileSync(process.argv[2], "utf8");
 const segments = [];

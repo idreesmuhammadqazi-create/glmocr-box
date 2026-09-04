@@ -10,6 +10,7 @@ import pymupdf as fitz
 
 from .client import OcrClient
 from .config import Settings
+from .katex_repair import KatexRepairer
 from .mathmd import mathify
 from .render import (
     detect_table_rects,
@@ -66,6 +67,7 @@ async def process_pdf(
     client: OcrClient,
     cache: PageCache,
     dry_run: bool = False,
+    repair: bool = True,
 ) -> dict:
     started = time.time()
     pdf_hash = hashlib.sha256(pdf_path.read_bytes()).hexdigest()[:16]
@@ -73,11 +75,18 @@ async def process_pdf(
     log.info("%s: %d pages", pdf_path.name, len(doc))
 
     sem = asyncio.Semaphore(settings.workers)
+    repairer = KatexRepairer() if repair else None
+    totals = {"checked": 0, "repaired": 0, "failed": 0}
 
     async def handle_page(idx: int, page: fitz.Page) -> str:
         async with sem:
             try:
-                return await _process_page(idx, page, settings, client, cache, pdf_hash, dry_run)
+                md = await _process_page(idx, page, settings, client, cache, pdf_hash, dry_run)
+                if not dry_run and repairer is not None:
+                    md, rstats = await repairer.repair_markdown(md)
+                    for k in totals:
+                        totals[k] += rstats[k]
+                return md
             except Exception as e:
                 log.error("[page %d] failed: %s (re-run to fill this page from cache)", idx + 1, e)
                 return f"_(OCR failed for page {idx + 1}: {e})_"
@@ -91,7 +100,7 @@ async def process_pdf(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(parts), encoding="utf-8")
     log.info("%s: wrote %s in %.1fs", pdf_path.name, out_path, time.time() - started)
-    return {"pages": len(pages), "out": str(out_path)}
+    return {"pages": len(pages), "out": str(out_path), "katex": totals}
 
 
 async def _process_page(

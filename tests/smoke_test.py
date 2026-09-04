@@ -149,9 +149,8 @@ def test_mathify_orphan_dollar_escaped():
 def test_mathify_unbalanced_braces():
     md = r"$ \frac{256}{3}\pi}{8^{3}}\times100 $ and $ \frac{-(-2)\pm\sqrt{([-]2)^{2}-4(7)(-80)}{2(7)} $"
     out = mathify(md)
-    assert "}" + "}" not in out.replace("}}", "XX") or True
-    node_ready = out.count("{") == out.count("}")
-    assert node_ready, out
+    assert "\\pi}{8" not in out
+    assert "\\pi{8" in out or "\\pi {" in out
     assert "and" in out
 
 
@@ -160,6 +159,52 @@ def test_mathify_simple_pipeline():
     out = mathify(md)
     assert "<table" not in out
     assert "&amp;" not in out
+
+
+def test_iter_math_segments():
+    from ocrpdf.mathmd import iter_math_segments
+    md = "a $x^{2}$ b\n```py\n$not_math$\n```\nc $$\\frac{1}{2}$$ d"
+    segs = list(iter_math_segments(md))
+    inners = [s[2] for s in segs]
+    assert "x^{2}" in inners and "\\frac{1}{2}" in inners
+    assert "not_math" not in inners
+    displays = [s[3] for s in segs]
+    assert displays == [False, True]
+
+
+def test_katex_repair_loop():
+    import asyncio as aio
+
+    from ocrpdf.katex_repair import KatexRepairer
+
+    rep = KatexRepairer()
+    if not rep.available:
+        print("test_katex_repair_loop SKIPPED (katex not installed)")
+        return
+
+    correct = r"\frac{a\sqrt{b}}{c}"
+    real_check = KatexRepairer._check_batch
+
+    async def fake_check(self, items):
+        return [None if it["tex"] == correct else "err: bad" for it in items]
+
+    KatexRepairer._check_batch = fake_check
+    try:
+        out, stats = aio.run(rep.repair_markdown(r"Intro $\frac{a\sqrt{b}{c}$ end"))
+        assert correct in out and stats["repaired"] == 1 and stats["failed"] == 0
+
+        out2, stats2 = aio.run(rep.repair_markdown(r"fine $x^{2}$ here"))
+        assert out2 == r"fine $x^{2}$ here" and stats2["checked"] == 1
+
+        async def always_bad(self, items):
+            return ["nope"] * len(items)
+
+        KatexRepairer._check_batch = always_bad
+        out3, stats3 = aio.run(rep.repair_markdown(r"keep $\frac{a\sqrt{b}{c}$ as-is"))
+        assert r"\frac{a\sqrt{b}{c}" in out3 and stats3["failed"] == 1
+    finally:
+        KatexRepairer._check_batch = real_check
+    print("test_katex_repair_loop OK")
 
 
 class MockClient:
@@ -217,6 +262,8 @@ if __name__ == "__main__":
     test_mathify_orphan_dollar_escaped()
     test_mathify_unbalanced_braces()
     test_mathify_simple_pipeline()
+    test_iter_math_segments()
+    test_katex_repair_loop()
     test_detection()
     test_pipeline_end_to_end()
     print("ALL TESTS PASSED")
