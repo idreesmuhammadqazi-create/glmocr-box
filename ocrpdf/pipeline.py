@@ -76,7 +76,11 @@ async def process_pdf(
 
     async def handle_page(idx: int, page: fitz.Page) -> str:
         async with sem:
-            return await _process_page(idx, page, settings, client, cache, pdf_hash, dry_run)
+            try:
+                return await _process_page(idx, page, settings, client, cache, pdf_hash, dry_run)
+            except Exception as e:
+                log.error("[page %d] failed: %s (re-run to fill this page from cache)", idx + 1, e)
+                return f"_(OCR failed for page {idx + 1}: {e})_"
 
     pages = await asyncio.gather(*[handle_page(i, doc[i]) for i in range(len(doc))])
     doc.close()

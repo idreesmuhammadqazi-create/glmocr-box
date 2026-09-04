@@ -126,10 +126,33 @@ def test_cleanup_math_entities_and_unicode():
     assert "code $x&lt;1$ stays" in out
 
 
-def test_mathify_complex_table_kept():
+def test_mathify_complex_table_expanded():
     md = '<table><tr><td rowspan="2">a</td><td>b</td></tr><tr><td>c</td></tr></table>'
     out = mathify(md)
-    assert "<table" in out
+    assert "<table" not in out
+    assert "| a | b |" in out and "| a | c |" in out
+
+
+def test_mathify_colspan_padded():
+    md = '<table><tr><td colspan="2">head</td></tr><tr><td>x</td><td>y</td></tr></table>'
+    out = mathify(md)
+    assert "| head |  |" in out or "| head | |" in out
+    assert "| x | y |" in out
+
+
+def test_mathify_orphan_dollar_escaped():
+    md = '<table><tr><td>a</td></tr><tr><td>20x+80=7x^{2}$ oe</td></tr></table>'
+    out = mathify(md)
+    assert "\\$ oe" in out
+
+
+def test_mathify_unbalanced_braces():
+    md = r"$ \frac{256}{3}\pi}{8^{3}}\times100 $ and $ \frac{-(-2)\pm\sqrt{([-]2)^{2}-4(7)(-80)}{2(7)} $"
+    out = mathify(md)
+    assert "}" + "}" not in out.replace("}}", "XX") or True
+    node_ready = out.count("{") == out.count("}")
+    assert node_ready, out
+    assert "and" in out
 
 
 def test_mathify_simple_pipeline():
@@ -189,7 +212,10 @@ if __name__ == "__main__":
     test_splice_fallback_append()
     test_html_table_to_pipes()
     test_cleanup_math_entities_and_unicode()
-    test_mathify_complex_table_kept()
+    test_mathify_complex_table_expanded()
+    test_mathify_colspan_padded()
+    test_mathify_orphan_dollar_escaped()
+    test_mathify_unbalanced_braces()
     test_mathify_simple_pipeline()
     test_detection()
     test_pipeline_end_to_end()

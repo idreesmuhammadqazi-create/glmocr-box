@@ -16,8 +16,8 @@ class Settings:
     model: str = DEFAULT_MODEL
     page_dpi: int = 200
     table_dpi: int = 300
-    workers: int = 3
-    max_retries: int = 5
+    workers: int = 2
+    max_retries: int = 8
     timeout: float = 300.0
     max_tokens: int | None = None
 

@@ -24,7 +24,18 @@ PDF ──▶ render each page @200 DPI
 - Geometric table detection (PyMuPDF `find_tables`, OpenCV line fallback for scans) kicks in whenever the model reports no table bboxes.
 - Page and table results are cached on disk, so re-runs only pay for work that didn't complete.
 
-Output: one `.md` per PDF, pages separated by `<!-- ===== Page N ===== -->` comments. Tables are HTML `<table>` (glm-ocr's native, structure-safe format — handles merged cells); every formula is LaTeX (`$...$` / `$$...$$`).
+Output: one `.md` per PDF, pages separated by `<!-- ===== Page N ===== -->` comments. All tables are GFM pipe tables (`rowspan` cells are expanded by repeating content, `colspan` padded), and a math-cleanup pass converts HTML entities (`&lt;` → `<`), unicode symbols (`≤` → `\le`, `×` → `\times`, …) and repairs unbalanced braces inside `$...$` — so every formula renders with KaTeX/MathJax in GitHub, VS Code, Obsidian, etc.
+
+## Math validation
+
+The OCR model occasionally emits structurally broken LaTeX (a dropped brace changes `\frac{a}{b}` into a one-argument `\frac`). Check any output file against real KaTeX:
+
+```bash
+npm install katex
+node tools/validate_math.js output.md
+```
+
+It extracts every `$...$` / `$$...$$` segment, renders it with `throwOnError: true`, and reports failures with positions.
 
 ## Setup
 

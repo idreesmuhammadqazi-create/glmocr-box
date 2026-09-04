@@ -35,9 +35,11 @@ class OcrClient:
         body = {"model": self.settings.model, "file": data_url}
         last_error: Exception | None = None
         for attempt in range(1, self.settings.max_retries + 1):
+            retry_after = None
             try:
                 resp = await self.client.post("/layout_parsing", json=body)
                 if resp.status_code in RETRY_STATUS:
+                    retry_after = resp.headers.get("Retry-After")
                     raise httpx.HTTPStatusError(
                         f"HTTP {resp.status_code}", request=resp.request, response=resp
                     )
@@ -59,7 +61,12 @@ class OcrClient:
                 raise
             except Exception as e:
                 last_error = e
-            delay = min(2 ** attempt * 1.5, 30) + random.uniform(0, 1)
+            delay = min(2 ** attempt * 2, 60) + random.uniform(0, 2)
+            if retry_after:
+                try:
+                    delay = max(delay, float(retry_after) + random.uniform(0, 1))
+                except ValueError:
+                    pass
             log.warning("%s OCR call failed (attempt %d/%d): %s — retrying in %.1fs",
                         kind, attempt, self.settings.max_retries, last_error, delay)
             await asyncio.sleep(delay)

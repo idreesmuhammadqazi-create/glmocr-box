@@ -3,5 +3,7 @@ __pycache__/
 *.pyc
 .ocrpdf-cache/
 out/
+node_modules/
+.katex-check/
 *.md
 !README.md
