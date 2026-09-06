@@ -96,14 +96,30 @@ class KatexRepairer:
 
         add(tex + "}")
         add(tex + "}}")
+        if re.search(r"\\(?:sqrt|binom|mathbb|mathbf|mathrm|text|overline|underline)$", tex):
+            add(tex + "{}")
+        if re.search(r"\\frac$", tex):
+            add(tex + "{}{}")
         add(base)
         return cands[:80]
 
-    async def repair_markdown(self, md: str) -> tuple[str, dict]:
+    async def repair_markdown(self, md: str, max_rounds: int = 3) -> tuple[str, dict]:
         stats = {"checked": 0, "repaired": 0, "failed": 0}
         if not self.available:
             log.warning("KaTeX repair disabled: %s", self.disabled_reason)
             return md, stats
+
+        for _ in range(max_rounds):
+            md, round_stats = await self._repair_pass(md)
+            stats["checked"] += round_stats["checked"]
+            stats["repaired"] += round_stats["repaired"]
+            stats["failed"] = round_stats["failed"]
+            if round_stats["failed"] == 0 or round_stats["checked"] == round_stats["failed"] and round_stats["repaired"] == 0:
+                break
+        return md, stats
+
+    async def _repair_pass(self, md: str) -> tuple[str, dict]:
+        stats = {"checked": 0, "repaired": 0, "failed": 0}
 
         segments = list(iter_math_segments(md))
         if not segments:

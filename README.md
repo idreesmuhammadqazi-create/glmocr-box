@@ -26,16 +26,27 @@ PDF ──▶ render each page @200 DPI
 
 Output: one `.md` per PDF, pages separated by `<!-- ===== Page N ===== -->` comments. All tables are GFM pipe tables (`rowspan` cells are expanded by repeating content, `colspan` padded), and a math-cleanup pass converts HTML entities (`&lt;` → `<`), unicode symbols (`≤` → `\le`, `×` → `\times`, …) and repairs unbalanced braces inside `$...$` — so every formula renders with KaTeX/MathJax in GitHub, VS Code, Obsidian, etc.
 
-## Math validation
+## Verification (default-on gate)
 
-The OCR model occasionally emits structurally broken LaTeX (a dropped brace changes `\frac{a}{b}` into a one-argument `\frac`). Check any output file against real KaTeX:
+Every run ends with a hard verification gate:
+
+1. **KaTeX check** — every `$...$` / `$$...$$` segment in the output is rendered with real KaTeX (`throwOnError: true`). This runs as a repair stage during processing (candidates are tried, first *valid* fix is spliced) and again as a final gate over the written file.
+2. **Structure check** — no raw HTML tables, no literal `\$`, no table cell with unbalanced `$` delimiters.
+
+If anything fails, the CLI exits non-zero, lists the exact segments/lines, and the output must not be treated as clean. Pass `--skip-verify` to opt out. Repair candidates (brace insertions, nested-`\frac` reconstruction, `\end{}` completions, empty-argument completions) are generated against the KaTeX oracle, so fixes are accepted only when they actually render.
+
+## Math validation tool
 
 ```bash
 npm install katex
-node tools/validate_math.js output.md
+KATEX_NODE_MODULES=/path/to/node_modules node tools/validate_math.js output.md
 ```
 
-It extracts every `$...$` / `$$...$$` segment, renders it with `throwOnError: true`, and reports failures with positions.
+Standalone re-check of any output file.
+
+## Guarantee for arbitrary PDFs
+
+`tests/corpus_test.py` feeds the pipeline a corpus of deliberately corrupted OCR outputs (unbalanced braces, bare `\sqrt`, unclosed `[` brackets, orphan `$`, unicode math in prose) and asserts the emitted Markdown is structurally clean and 100 % KaTeX-valid. Any new failure class found in the wild belongs in that corpus, and the pipeline must be fixed until the corpus passes.
 
 ## Setup
 

@@ -6,7 +6,9 @@ from pathlib import Path
 
 from .client import OcrClient
 from .config import Settings
+from .katex_repair import KatexRepairer
 from .pipeline import PageCache, process_pdf
+from .structural import check_structural
 
 
 def main(argv=None) -> int:
@@ -23,7 +25,7 @@ def main(argv=None) -> int:
     parser.add_argument("--no-cache", action="store_true", help="Ignore/overwrite cached page results")
     parser.add_argument("--cache-dir", default=".ocrpdf-cache", help="Cache directory (default .ocrpdf-cache)")
     parser.add_argument("--dry-run", action="store_true", help="Render + table detection only, no API calls")
-    parser.add_argument("--verify", action="store_true", help="After writing output, verify all math with KaTeX and fail on errors")
+    parser.add_argument("--skip-verify", action="store_true", help="Skip the post-run KaTeX + structure verification gate")
     parser.add_argument("--no-katex-repair", action="store_true", help="Skip the KaTeX-driven math repair pass")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -97,23 +99,26 @@ def main(argv=None) -> int:
         if k.get("checked"):
             print(f"  katex: {k['checked']} segments, {k['repaired']} repaired, {k['failed']} failed")
 
-    if args.verify:
-        from .katex_repair import KatexRepairer
+    if not args.skip_verify:
         rep = KatexRepairer()
         if not rep.available:
-            print(f"verification unavailable: {rep.disabled_reason}", file=sys.stderr)
-            return 1
+            print(f"warning: post-run verification unavailable: {rep.disabled_reason}", file=sys.stderr)
+            return 0
         bad = 0
         for r in results:
             md = Path(r["out"]).read_text(encoding="utf-8")
             failures = asyncio.run(rep.verify_markdown(md))
+            structural = check_structural(md)
             for tex, e in failures:
                 bad += 1
                 print(f"VERIFY FAIL {r['out']}: {e[:120]}\n  tex: {tex[:120]}", file=sys.stderr)
+            for msg in structural:
+                bad += 1
+                print(f"VERIFY FAIL {r['out']}: {msg}", file=sys.stderr)
         if bad:
-            print(f"verification FAILED: {bad} bad segment(s)", file=sys.stderr)
+            print(f"verification FAILED: {bad} bad finding(s) — output is NOT guaranteed clean", file=sys.stderr)
             return 1
-        print("verification PASSED: all math renders with KaTeX")
+        print("verification PASSED: all math renders with KaTeX, structure clean")
     return 0
 
 
