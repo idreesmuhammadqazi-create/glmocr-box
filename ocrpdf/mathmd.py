@@ -20,7 +20,7 @@ UNICODE_MATH = {
     "∼": r"\sim",
     "±": r"\pm",
     "∓": r"\mp",
-    "√": r"\sqrt",
+    "√": r"\surd",
     "°": r"^{\circ}",
     "′": "'",
     "″": "''",
@@ -141,13 +141,50 @@ class _TableParser(HTMLParser):
         self._colspan = 1
 
 
+_PROSE_WORDS = {
+    "for", "their", "angle", "mark", "marks", "answer", "correct", "seen",
+    "award", "awarded", "score", "scored", "line", "point", "value", "values",
+    "with", "and", "the", "to", "or", "if", "is", "in", "on", "of", "not",
+    "given", "following", "working", "where", "answer",
+}
+_MATH_TRIGGER = re.compile(r"[=^\\≤≥×÷±√π<>]")
+_MATH_CHARS = re.compile(r"^[0-9a-zA-Z{}()\[\]^_+=<>≤≥×÷±√π.,\s\\|/-]+$")
+
+
+def _unfuse_text(text: str) -> str:
+    text = re.sub(r"(?<=[0-9a-z\)\].])OR(?=M\d|B\d|SC\d)", " OR ", text)
+    text = re.sub(r"(?<=[0-9a-z\)\]\.])((?:M\d{1,2}(?:dep)?|B\d|SC\d) for)", r" \1", text)
+    text = re.sub(r"(?<=for)(?=[0-9])", " ", text)
+    text = re.sub(r"(?<=or)(?=[MB]\d? ?mark)", " ", text)
+    text = re.sub(r"(?<=[a-z])([MB])mark", r" \1 mark", text)
+    text = re.sub(r"(?<=oe)(?=or\b)", " ", text)
+    return text
+
+
+def _maybe_math_wrap(text: str) -> str:
+    if "$" in text:
+        return text
+    m = re.search(r"\s+\b(oe|nfww|soi)\b\s*$", text)
+    suffix = ""
+    if m:
+        suffix = m.group(0).strip()
+        text = text[: m.start()]
+    tokens = text.split()
+    if not _MATH_TRIGGER.search(text) or not _MATH_CHARS.match(text):
+        return (text + " " + suffix).strip()
+    if any(t.lower() in _PROSE_WORDS for t in tokens):
+        return (text + " " + suffix).strip()
+    return "$" + text.strip() + "$" + ((" " + suffix) if suffix else "")
+
+
 def _pipe_cell(text: str) -> str:
     text = text.strip()
     lines = [re.sub(r"\s+", " ", ln).strip() for ln in text.split("\n")]
     text = "<br>".join(ln for ln in lines if ln)
     if text.count("$") % 2 == 1:
-        text = text.replace("$", "\\$")
-    return text.replace("|", "\\|")
+        text = text.replace("$", "")
+    text = _unfuse_text(text)
+    return _maybe_math_wrap(text).replace("|", "\\|")
 
 
 def _convert_one_table(html_block: str) -> str:
@@ -206,21 +243,12 @@ def html_tables_to_pipes(md: str) -> str:
     return "".join(result)
 
 
-def _balance_braces(text: str) -> str:
-    out = []
-    depth = 0
-    for ch in text:
-        if ch == "{":
-            depth += 1
-            out.append(ch)
-        elif ch == "}":
-            if depth == 0:
-                continue
-            depth -= 1
-            out.append(ch)
-        else:
-            out.append(ch)
-    return "".join(out)
+def _balance_brackets(text: str) -> str:
+    opens = len(re.findall(r"(?<!\\left)\[", text))
+    closes = len(re.findall(r"(?<!\\right)\]", text))
+    if opens > closes:
+        text = text + "]" * (opens - closes)
+    return text
 
 
 def _fix_math(text: str) -> str:
@@ -230,8 +258,9 @@ def _fix_math(text: str) -> str:
         text = unescape(text)
     for uni, cmd in UNICODE_MATH.items():
         text = text.replace(uni, cmd)
-    if "{" in text or "}" in text:
-        text = _balance_braces(text)
+    text = re.sub(r"\\sqrt(?![\[\{0-9a-zA-Z])", r"\\surd", text)
+    if "[" in text:
+        text = _balance_brackets(text)
     return text
 
 

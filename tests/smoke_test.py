@@ -113,7 +113,7 @@ def test_html_table_to_pipes():
     assert "<table" not in out
     seps = [ln for ln in out.splitlines() if re.fullmatch(r"\|(-{3}\|)+", ln)]
     assert len(seps) == 1
-    assert "| 7(a) | -3<x≤2 | 2 |" in out
+    assert "| 7(a) | $-3<x≤2$ | 2 |" in out
     assert "M1 for $ k < 5 $<br>OR<br>M2 for $a\\times b$ | 1 |" in out
 
 
@@ -140,18 +140,52 @@ def test_mathify_colspan_padded():
     assert "| x | y |" in out
 
 
-def test_mathify_orphan_dollar_escaped():
+def test_mathify_orphan_dollar_stripped_and_wrapped():
     md = '<table><tr><td>a</td></tr><tr><td>20x+80=7x^{2}$ oe</td></tr></table>'
     out = mathify(md)
-    assert "\\$ oe" in out
+    assert "\\$" not in out
+    assert "$20x+80=7x^{2}$ oe" in out
 
 
-def test_mathify_unbalanced_braces():
-    md = r"$ \frac{256}{3}\pi}{8^{3}}\times100 $ and $ \frac{-(-2)\pm\sqrt{([-]2)^{2}-4(7)(-80)}{2(7)} $"
+def test_mathify_unbalanced_braces_left_alone():
+    md = r"$ \frac{256}{3}\pi}{8^{3}}\times100 $"
     out = mathify(md)
-    assert "\\pi}{8" not in out
-    assert "\\pi{8" in out or "\\pi {" in out
-    assert "and" in out
+    assert "\\frac{256}{3}\\pi}{8^{3}}" in out
+
+
+def test_bracket_notation_balanced():
+    md = r"$[y=\frac{9}{\sqrt{x+1}}$ and $ [\cos y=\frac{10^{2}+14^{2}-13^{2}}{2\times10\times14} $"
+    out = mathify(md)
+    assert out.count("[") == out.count("]")
+    assert "\\sqrt{x+1}}]" in out
+
+
+def test_orphan_dollar_stripped_and_math_wrapped():
+    md = ('<table><tr><td>Q</td></tr>'
+          '<tr><td>20x+80+10x=7x^{2}+28x$ oe</td></tr>'
+          '<tr><td>-3&lt;x≤2</td></tr>'
+          '<tr><td>80 to 85</td></tr></table>')
+    out = mathify(md)
+    assert "\\$" not in out
+    assert "$20x+80+10x=7x^{2}+28x$ oe" in out
+    assert "$-3<x\\le2$" in out
+    assert "80 to 85" in out and "$80" not in out
+
+
+def test_bare_sqrt_to_surd():
+    md = '<table><tr><td>$\\sqrt$</td><td>Correct</td></tr></table>'
+    out = mathify(md)
+    assert "$\\surd$" in out and "$\\sqrt$" not in out
+
+
+def test_unfused_marks_text():
+    md = ('<table><tr><td>Q</td></tr>'
+          '<tr><td>180-2×67 oeORM1 for [obtuse] angle AOB=2×67M1 for angle OAT</td></tr>'
+          '<tr><td>B2 for 2.168 or for130.08 [min]</td></tr></table>')
+    out = mathify(md)
+    assert "OR M1 for" in out
+    assert " M1 for angle" in out
+    assert "for 130.08" in out
 
 
 def test_mathify_simple_pipeline():
@@ -259,10 +293,13 @@ if __name__ == "__main__":
     test_cleanup_math_entities_and_unicode()
     test_mathify_complex_table_expanded()
     test_mathify_colspan_padded()
-    test_mathify_orphan_dollar_escaped()
-    test_mathify_unbalanced_braces()
-    test_mathify_simple_pipeline()
-    test_iter_math_segments()
+    test_mathify_orphan_dollar_stripped_and_wrapped()
+    test_mathify_unbalanced_braces_left_alone()
+    test_bracket_notation_balanced()
+    test_orphan_dollar_stripped_and_math_wrapped()
+    test_unfused_marks_text()
+    test_bare_sqrt_to_surd()
+    test_mathify_complex_table_expanded()
     test_katex_repair_loop()
     test_detection()
     test_pipeline_end_to_end()

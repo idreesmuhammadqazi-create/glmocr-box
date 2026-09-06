@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from pathlib import Path
 
 from .mathmd import iter_math_segments
@@ -67,6 +68,9 @@ class KatexRepairer:
             if t and t not in cands:
                 cands.append(t)
 
+        opens = tex.count("{")
+        closes = tex.count("}")
+
         stack: list[int] = []
         unmatched = set()
         for i, ch in enumerate(tex):
@@ -78,14 +82,21 @@ class KatexRepairer:
                 else:
                     unmatched.add(i)
         base = "".join(ch for i, ch in enumerate(tex) if i not in unmatched)
+
+        if closes > opens:
+            for m in re.finditer(r"\\frac\{", tex):
+                add(tex[: m.end()] + "\\frac{" + tex[m.end():])
+
+        anchors = [
+            i for i, ch in enumerate(tex)
+            if ch in "{}" and not (i > 0 and tex[i - 1] == "{")
+        ]
+        for pos in reversed(anchors):
+            add(tex[:pos] + "}" + tex[pos:])
+
+        add(tex + "}")
+        add(tex + "}}")
         add(base)
-        bases = [base, base + "}", base + "}}"]
-        for b in bases:
-            add(b)
-        for b in bases:
-            anchors = [i for i, ch in enumerate(b) if ch in "{}"]
-            for pos in reversed(anchors):
-                add(b[:pos] + "}" + b[pos:])
         return cands[:80]
 
     async def repair_markdown(self, md: str) -> tuple[str, dict]:
