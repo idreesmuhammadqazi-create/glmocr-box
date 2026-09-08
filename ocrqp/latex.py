@@ -95,6 +95,15 @@ def split_math(text: str) -> list[tuple[bool, str]]:
     return segs
 
 
+def join_segments(segs: list[tuple[bool, str]]) -> str:
+    """Reassemble segments, stripping padding inside $...$ (GitHub/KaTeX inline
+    math requires the $ to be immediately adjacent to non-space content)."""
+    out = []
+    for m, c in segs:
+        out.append(("$" + c.strip() + "$") if m else c)
+    return "".join(out)
+
+
 def katex_available() -> bool:
     return shutil.which("node") is not None and KATEX_JS.exists()
 
@@ -160,10 +169,7 @@ def sanitize_text(text: str, validate: bool = True) -> tuple[str, list[str]]:
                 problems.append(f"escaped invalid latex: {content[:40]!r} ({err})")
 
     # 4. reassemble
-    out = []
-    for m, c in segs:
-        out.append(f"${c}$" if m else c)
-    return "".join(out), problems
+    return join_segments(segs), problems
 
 
 MATH_FIELDS = ("text", "answer", "working", "notes")
@@ -211,7 +217,7 @@ def sanitize_document(dataset: dict, validate: bool = True) -> tuple[dict, list[
                 problems.append(f"{qid}:{f} escaped invalid latex ({(err or '')[:40]})")
 
     for (qi, f), segs in field_segs.items():
-        dataset["questions"][qi][f] = "".join(f"${c}$" if m else c for m, c in segs)
+        dataset["questions"][qi][f] = join_segments(segs)
     return dataset, problems
 
 
@@ -310,4 +316,4 @@ def wrap_bare_math(text: str) -> str:
             merged[-1] = (True, merged[-1][1] + piece)
         else:
             merged.append((is_math, piece))
-    return "".join(f"${t}$" if m else t for m, t in merged)
+    return join_segments(merged)

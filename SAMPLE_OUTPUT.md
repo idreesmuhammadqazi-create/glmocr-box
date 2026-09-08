@@ -212,7 +212,7 @@ $72$
 
 $13.5$ or $13\frac{1}{2}$
 
-**Guidance:** B1 for $3.5$ oeor M1 for $\frac{100-their\ 72}{8} $ $[+10]$
+**Guidance:** B1 for $3.5$ oeor M1 for $\frac{100-their\ 72}{8}$ $[+10]$
 
 ## 19  (3 marks)
 
@@ -315,19 +315,19 @@ $40$
 
 Correct column, from $2$ to $5$ and height $34$
 
-**Guidance:** M1 for $ \frac{102}{5-2} $
+**Guidance:** M1 for $\frac{102}{5-2}$
 
 ## 26  (4 marks)
 
 **Working:**
 
-$ 2x^{2}-5x\left[=0\right] $ or better or $ 2y^{2}+18y+28\left[=0\right] $ or better
-$ x=0, y=-7 $ $ x=2.5, y=-2 $
+$2x^{2}-5x\left[=0\right]$ or better or $2y^{2}+18y+28\left[=0\right]$ or better
+$x=0, y=-7$ $x=2.5, y=-2$
 
-**Answer:** $ x=0, y=-7 $ $ x=2.5, y=-2 $
+**Answer:** $x=0, y=-7$ $x=2.5, y=-2$
 
-**Guidance:** M1 for $ 2x^{2}-3x-7=2x-7 $ oe or for $ y=2\left(\frac{y+7}{2}\right)^{2}-3\left(\frac{y+7}{2}\right)-7 $
-B1 for $ x=0, y=-7 $ or for $ x=0 $ and $ x=2.5 $ or for $ x=2.5, y=-2 $ or for $ y=-2 $ and $ y=-7 $ If $M1B0$ or $M2B0$ scored then $SC1$ for correct substitution seen of both of their x-values or their y-values into $ y=2x^{2}-3x-7 $ or $ y=2x-7 $
+**Guidance:** M1 for $2x^{2}-3x-7=2x-7$ oe or for $y=2\left(\frac{y+7}{2}\right)^{2}-3\left(\frac{y+7}{2}\right)-7$
+B1 for $x=0, y=-7$ or for $x=0$ and $x=2.5$ or for $x=2.5, y=-2$ or for $y=-2$ and $y=-7$ If $M1B0$ or $M2B0$ scored then $SC1$ for correct substitution seen of both of their x-values or their y-values into $y=2x^{2}-3x-7$ or $y=2x-7$
 
 ## 27  (4 marks)
 
@@ -335,7 +335,7 @@ B1 for $ x=0, y=-7 $ or for $ x=0 $ and $ x=2.5 $ or for $ x=2.5, y=-2 $ or for 
 
 $16.8$ or $16.80$ to $16.81$
 
-**Guidance:** M3 for $ \tan=\frac{5}{\sqrt{15^{2}+7^{2}}} $ oe or $ \sin=\frac{5}{\sqrt{15^{2}+7^{2}+5^{2}}} $ oe or $ \cos=\frac{\sqrt{15^{2}+7^{2}}}{\sqrt{15^{2}+7^{2}+5^{2}}} $ oe or M2 for $ 15^{2}+7^{2} $ or $ 15^{2}+7^{2}+5^{2} $ or M1 for indication of correct angle
+**Guidance:** M3 for $\tan=\frac{5}{\sqrt{15^{2}+7^{2}}}$ oe or $\sin=\frac{5}{\sqrt{15^{2}+7^{2}+5^{2}}}$ oe or $\cos=\frac{\sqrt{15^{2}+7^{2}}}{\sqrt{15^{2}+7^{2}+5^{2}}}$ oe or M2 for $15^{2}+7^{2}$ or $15^{2}+7^{2}+5^{2}$ or M1 for indication of correct angle
 
 ## 28(a)  (1 marks)
 
@@ -347,9 +347,9 @@ $4$
 
 **Working:**
 
-$ \frac{1}{343} $
+$\frac{1}{343}$
 
-**Guidance:** M1 for $ [x=] $ $f(1)$ or better
+**Guidance:** M1 for $[x=]$ $f(1)$ or better
 
 ## 29(a)  (3 marks)
 
@@ -357,7 +357,7 @@ $ \frac{1}{343} $
 
 $63.0$ or $63.02$ to $63.03$
 
-**Guidance:** M2 for $ [\cos y=]\frac{10^{2}+14^{2}-13^{2}}{2\times10\times14} $ oe or M1 for $ 13^{2}=10^{2}+14^{2}-2\times10\times14\times\cos y $ oe
+**Guidance:** M2 for $[\cos y=]\frac{10^{2}+14^{2}-13^{2}}{2\times10\times14}$ oe or M1 for $13^{2}=10^{2}+14^{2}-2\times10\times14\times\cos y$ oe
 
 ## 29(b)  (5 marks)
 
@@ -365,4 +365,4 @@ $63.0$ or $63.02$ to $63.03$
 
 $15.1$ or $15.13$ to $15.14$
 
-**Guidance:** M2 for $ [AD]=\frac{14\sin 38}{\sin 97} $ or M1 for $ \frac{AD}{\sin 38}=\frac{14}{\sin 97} $ oe M2 for $ 10^{2}+(\text{their AD})^{2}-2\times10\times\text{their AD}\times\cos(\text{their y}+180-97-38) $ or M1 for angle $ BAD=\text{their y}+180-97-38 $ soi
+**Guidance:** M2 for $[AD]=\frac{14\sin 38}{\sin 97}$ or M1 for $\frac{AD}{\sin 38}=\frac{14}{\sin 97}$ oe M2 for $10^{2}+(\text{their AD})^{2}-2\times10\times\text{their AD}\times\cos(\text{their y}+180-97-38)$ or M1 for angle $BAD=\text{their y}+180-97-38$ soi
