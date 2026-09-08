@@ -16,10 +16,27 @@ import subprocess
 from pathlib import Path
 
 UNICODE_MAP = {
-    "≤": r"\leq ", "≥": r"\geq ", "≠": r"\neq ",
-    "×": r"\times ", "÷": r"\div ", "±": r"\pm ", "−": "-",
-    "π": r"\pi ", "∞": r"\infty ", "′": "'", "°": r"^\circ",
-    "√": r"\sqrt", "∴": r"\therefore ", "∵": r"\because ",
+    # relations & operators
+    "≤": r" \leq ", "≥": r" \geq ", "≠": r" \neq ",
+    "×": r" \times ", "÷": r" \div ", "±": r" \pm ",
+    "−": "-", "–": "-", "—": "-", "‐": "-", "‑": "-",
+    "∗": r" \ast ",
+    # fullwidth variants (seen in A-Level schemes)
+    "＜": "<", "＞": ">", "＝": "=",
+    # greek
+    "λ": r" \lambda ", "μ": r" \mu ", "σ": r" \sigma ",
+    "α": r" \alpha ", "β": r" \beta ", "π": r" \pi ",
+    "φ": r" \phi ", "Φ": r" \Phi ", "Σ": r" \Sigma ",
+    "Δ": r" \Delta ", "θ": r" \theta ",
+    # sets & misc
+    "∈": r" \in ", "∉": r" \notin ", "∩": r" \cap ",
+    "∪": r" \cup ", "⊂": r" \subset ", "∅": r" \emptyset ",
+    "∞": r" \infty ", "′": "'", "°": r"^\circ",
+    "√": r"\sqrt", "∴": r" \therefore ", "∵": r" \because ",
+    # typographic quotes / ellipsis / dots -> ASCII (KaTeX strict rejects them)
+    "‘": "'", "’": "'", "“": '"', "”": '"',
+    "…": r" \ldots ", "·": r" \cdot ", "⋅": r" \cdot ",
+    "″": '"', "‴": "\"",
 }
 
 KATEX_JS = Path(__file__).resolve().parent.parent / "tools" / "katex_check.js"
@@ -138,10 +155,17 @@ def validate_katex(exprs: list[str], display: bool = False) -> list[tuple[bool, 
 
 
 def _escape_for_text(s: str) -> str:
-    """Make a string safe to drop into a \\text{} so KaTeX always accepts it."""
-    return s.replace("\\", r"\backslash ").replace("{", "\\{").replace("}", "\\}") \
-            .replace("$", "").replace("%", r"\%").replace("#", r"\#").replace("_", r"\_") \
-            .replace("^", r"\^{}").replace("&", r"\&")
+    """Last-resort: make content safe inside \text{} (KaTeX text mode).
+
+    \text{} cannot span lines and treats \ { } as special, so strip them down
+    to plain readable text. Only used when a segment can't be valid math.
+    """
+    s = s.replace("\n", " ")
+    s = s.replace("\\", " ")           # drop command backslashes (show as words)
+    s = s.replace("{", "(").replace("}", ")")
+    s = s.replace("$", "").replace("%", " percent ").replace("#", "")
+    s = s.replace("&", " and ").replace("_", " ").replace("^", " ").replace("~", " ")
+    return re.sub(r"  +", " ", s).strip()
 
 
 def sanitize_text(text: str, validate: bool = True) -> tuple[str, list[str]]:
@@ -188,8 +212,11 @@ def repair_text(text: str) -> list[tuple[bool, str]]:
     """Fast repair (no subprocess): unicode + delimiters + braces. Returns segments."""
     text = replace_unicode(text)
     text = "\n".join(_fix_line_delimiters(line) for line in text.split("\n"))
-    text = wrap_bare_math(text)
-    return [(m, balance_braces(c) if m else c) for m, c in split_math(text)]
+    # wrap bare math per line so a math segment never spans a newline
+    text = "\n".join(wrap_bare_math(line) for line in text.split("\n"))
+    segs = [(m, balance_braces(c) if m else c) for m, c in split_math(text)]
+    # KaTeX inline math cannot contain a raw newline -> collapse it
+    return [(m, c.replace("\n", " ") if m else c) for m, c in segs]
 
 
 def sanitize_document(dataset: dict, validate: bool = True) -> tuple[dict, list[str]]:

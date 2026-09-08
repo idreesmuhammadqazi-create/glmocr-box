@@ -150,7 +150,7 @@ def parts_from_markscheme_table(rows: list[list[str]], page: int) -> list[Questi
     qi = _col_index(header, "question")
     ai = _col_index(header, "answer")
     mi = _col_index(header, "marks", "mark")
-    pi = _col_index(header, "partial")
+    pi = _col_index(header, "partial", "guidance")
 
     def cell(row: list[str], i: int | None) -> str:
         return row[i].strip() if i is not None and i < len(row) else ""
@@ -168,15 +168,23 @@ def parts_from_markscheme_table(rows: list[list[str]], page: int) -> list[Questi
 
     parts: list[QuestionPart] = []
     for qid, grows in groups:
-        answers = [cell(r, ai) for r in grows if cell(r, ai)]
+        content_rows = [r for r in grows if cell(r, ai)]
+        # A-Level style: a trailing row with empty answer + plain-integer marks
+        # is the question TOTAL (not an extra mark-type). Prefer it; else sum types.
+        total_rows = [r for r in grows if not cell(r, ai) and cell(r, mi).isdigit()]
+        if total_rows:
+            marks: int | None = int(cell(total_rows[-1], mi))
+        else:
+            msum = sum(_parse_marks(cell(r, mi)) for r in content_rows)
+            marks = msum if msum > 0 else None
+        answers = [cell(r, ai) for r in content_rows]
         notes = [cell(r, pi) for r in grows if cell(r, pi)]
-        marks = sum(_parse_marks(cell(r, mi)) for r in grows)
         working = "\n".join(answers)
         answer = answers[-1] if answers else ""
         parts.append(
             QuestionPart(
                 id=qid,
-                marks=marks if marks > 0 else None,
+                marks=marks,
                 text=working,
                 page=page,
                 answer=answer,

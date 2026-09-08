@@ -9,7 +9,10 @@ from .client import OCRClient
 from .config import Config
 from .layout import image_bboxes, resolve_table_bboxes
 from .render import Renderer, crop_px, px_bbox_to_pt
-from .segment import QuestionPart, attach_diagrams, segment_page
+from .segment import (
+    QuestionPart, attach_diagrams, segment_page,
+    extract_tables, is_markscheme_table, parse_html_table,
+)
 from .splice import splice_tables
 
 
@@ -66,10 +69,20 @@ def process_pdf(
             # OCR'd it well, and re-OCRing a full-page crop is slow/wasteful.
             table_boxes = resolve_table_bboxes(pass1, page.image)
             page_area = float(page.width * page.height) or 1.0
+            # If pass 1 already produced a valid markscheme table on this page,
+            # trust it. Re-OCRing a big structured table returns a differently-
+            # structured table (rowspan lost) and the splice would corrupt it.
+            page_has_ms_table = any(
+                is_markscheme_table(parse_html_table(t))
+                for t, _ in extract_tables(pass1.markdown)
+            )
             rescued: list[str] = []
             for tb in table_boxes:
                 area_frac = ((tb[2] - tb[0]) * (tb[3] - tb[1])) / page_area
-                if not config.table_rescue or area_frac > config.rescue_max_area:
+                skip = (not config.table_rescue
+                        or page_has_ms_table
+                        or area_frac > config.rescue_max_area)
+                if skip:
                     rescued.append("")  # keep the pass-1 table for this one
                     continue
                 bbox_pt = px_bbox_to_pt(tb, page.scale)
