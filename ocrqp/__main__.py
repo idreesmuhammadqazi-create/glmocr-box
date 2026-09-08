@@ -16,6 +16,7 @@ from .client import make_client
 from .config import Config
 from .json_out import document_to_dataset, write_dataset
 from .json_to_md import convert, dataset_to_markdown
+from .health import format_report, validate_dataset
 from .ocr import process_pdf
 
 
@@ -69,6 +70,8 @@ def cmd_ocr(args: argparse.Namespace) -> int:
         mpath = _write_md(dataset, args.out)
         print(f"  -> {jpath}  ({len(dataset['questions'])} questions)", file=sys.stderr)
         print(f"  -> {mpath}", file=sys.stderr)
+        rep = validate_dataset(dataset)
+        print("  " + format_report(rep).replace("\n", "\n  "), file=sys.stderr)
 
         if storage:
             coll = storage.create_collection(expected_file_count=2)
@@ -98,6 +101,22 @@ def cmd_upload(args: argparse.Namespace) -> int:
         info = storage.upload_file(f, collection_id=cid)
         print(f"{Path(f).name}: {info['file']['url']}")
     return 0
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    import json
+    worst = 0
+    for jf in sorted(Path(args.json_dir).glob("*.json")):
+        try:
+            ds = json.loads(jf.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"[FAIL] {jf.name}: unreadable ({e})", file=sys.stderr)
+            worst = max(worst, 2)
+            continue
+        rep = validate_dataset(ds, validate_katex_flag=not args.no_katex)
+        print(format_report(rep))
+        worst = max(worst, {"PASS": 0, "WARN": 1, "FAIL": 2}[rep["verdict"]])
+    return 0 if worst < 2 else 1
 
 
 def cmd_build(args: argparse.Namespace) -> int:
@@ -138,6 +157,11 @@ def build_parser() -> argparse.ArgumentParser:
     u.add_argument("files", nargs="+", help="files to upload")
     u.add_argument("--collection", action="store_true", help="group into one collection URL")
     u.set_defaults(fn=cmd_upload)
+
+    r = sub.add_parser("report", help="health-check dataset JSON files")
+    r.add_argument("--json-dir", default="out")
+    r.add_argument("--no-katex", action="store_true", help="skip KaTeX validation")
+    r.set_defaults(fn=cmd_report)
 
     b = sub.add_parser("build", help="build a custom paper from selected questions")
     b.add_argument("--json-dir", default="out")
