@@ -79,14 +79,27 @@ python examples/demo_mock.py     # synthetic PDF -> JSON -> custom paper
 python -m pytest tests/ -q       # test suite (mock backend)
 ```
 
-## Tuning (once real docs/key are in)
+## Status: validated on a real markscheme
 
-These are the spots designed to be adjusted against real GLM output:
+Ran against `0580_w25_ms_41.pdf` (Cambridge IGCSE Maths Paper 4 mark scheme,
+Oct/Nov 2025) via the international gateway (`api.z.ai`):
 
-- `client.normalize_response` — confirm the exact `layout_parsing` JSON schema.
-- `segment.py` regexes — question/part/marks detection for your paper format.
-- `segment.attach_diagrams` — diagram→question attachment heuristic.
-- `json_out.document_to_dataset` — the markscheme `answer`/`working`/`notes` split.
+- **46 questions** extracted, **total marks = 100** (matches the paper maximum).
+- Markscheme pages are a single `Question | Answer | Marks | Partial Marks`
+  table. `segment.py` parses it with a **rowspan-aware** grid expander, groups
+  each question's worked-solution rows, and sums mark-types (`M1`/`M2`/`A1`/`B2`).
+- Equations come through as clean LaTeX (`$3\frac{1}{2}$`, `$3g-2g^{2}$`).
+- Full-page tables skip pass-2 rescue (pass 1 is already accurate; re-OCRing a
+  whole-page crop is slow). Rescue still applies to small embedded tables.
+
+## Tuning (remaining, needs a real question paper)
+
+- `segment.py` prose regexes — question/part/marks detection for **question
+  papers** (the markscheme path is done; the qp path is heuristic).
+- `segment.attach_diagrams` — diagram→question attachment heuristic (needs a qp
+  with real figures to validate).
+- `client.normalize_response` — confirmed for the current schema; revisit if the
+  gateway changes `layout_details`.
 
 ## Layout
 
