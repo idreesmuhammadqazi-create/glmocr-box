@@ -5,6 +5,7 @@ import json
 import re
 from pathlib import Path
 
+from .latex import sanitize_document
 from .ocr import ProcessedDocument
 
 # Cambridge filename: 0580_w25_ms_41.pdf -> subject/series/kind/paper+variant
@@ -34,7 +35,7 @@ def parse_filename(name: str) -> dict:
     }
 
 
-def document_to_dataset(doc: ProcessedDocument) -> dict:
+def document_to_dataset(doc: ProcessedDocument, sanitize: bool = True, validate: bool = True) -> dict:
     meta = parse_filename(Path(doc.source_pdf).name)
     kind = meta.get("kind", "unknown")
 
@@ -54,7 +55,7 @@ def document_to_dataset(doc: ProcessedDocument) -> dict:
                 q["notes"] = part.notes
             questions.append(q)
 
-    return {
+    dataset = {
         "paper": meta.get("paper", ""),
         "subject": meta.get("subject", ""),
         "series": meta.get("series", ""),
@@ -63,6 +64,11 @@ def document_to_dataset(doc: ProcessedDocument) -> dict:
         "pages": len(doc.pages),
         "questions": questions,
     }
+    if sanitize:
+        dataset, problems = sanitize_document(dataset, validate=validate)
+        if problems:
+            dataset["latex_repairs"] = problems
+    return dataset
 
 
 def write_dataset(dataset: dict, out_dir: str | Path) -> Path:

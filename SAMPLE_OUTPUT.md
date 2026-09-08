@@ -74,9 +74,9 @@ $3g-2g^{2}$ final answer
 
 **Working:**
 
--3<x≤2
+-3<x\leq 2
 
-**Guidance:** B1 for-3<x or x≤2
+**Guidance:** B1 for-3<x or x\leq 2
 
 ## 7(b)  (2 marks)
 
@@ -84,7 +84,7 @@ $3g-2g^{2}$ final answer
 
 -1,0,1,2,3,4
 
-**Guidance:** B1 for 5 correct (and no extras) or 6 correct with one extra or B1 for-2<x≤4
+**Guidance:** B1 for 5 correct (and no extras) or 6 correct with one extra or B1 for-2<x\leq 4
 
 ## 8  (1 marks)
 
@@ -98,7 +98,7 @@ $3g-2g^{2}$ final answer
 
 34.2
 
-**Guidance:** M1 for figs 342 or for k×60×60 or for k÷1000
+**Guidance:** M1 for figs 342 or for k\times 60\times 60 or for k\div 1000
 
 ## 10  (2 marks)
 
@@ -114,7 +114,7 @@ $3g-2g^{2}$ final answer
 
 51
 
-**Guidance:** M1 for 60×$\frac{100-15}{100}$ oe or B1 for 9
+**Guidance:** M1 for 60\times $\frac{100-15}{100}$ oe or B1 for 9
 
 ## 11(b)  (2 marks)
 
@@ -156,7 +156,7 @@ $\frac{4}{3}\times\pi\times4^{3}[\frac{256}{3}\pi]$
 
 47.6 nfww or 47.63 to 47.64...nfww
 
-**Guidance:** B2 for 52.4 or 52.35 to 52.37 or $\frac{50}{3}\pi$ nfww OR M2 for $\frac{8^{3}-\frac{256}{3}\pi}{8^{3}}\times100$ oe or M1 for $\frac{8^{3}-\frac{256}{3}\pi}{8^{3}}$ [$\times100$] oe or $\frac{256}{3}\pi}{8^{3}}\times100$ oe
+**Guidance:** B2 for 52.4 or 52.35 to 52.37 or $\frac{50}{3}\pi$ nfww OR M2 for $\frac{8^{3}-\frac{256}{3}\pi}{8^{3}}\times100$ oe or M1 for $\frac{8^{3}-\frac{256}{3}\pi}{8^{3}}$ [$\times100$] oe or $\frac{256}{3}\pi{8^{3}}\times100$ oe
 
 ## 14(c)  (2 marks)
 
@@ -180,7 +180,7 @@ $\frac{4}{3}\times\pi\times4^{3}[\frac{256}{3}\pi]$
 
 46
 
-**Guidance:** M2 for [angle ATB] = 180-2×67 oeORM1 for [obtuse] angle AOB=2×67M1 for angle OAT or angle OBT=90ORM1 for angle TBA=67 or angle TAB=67M1 for angle TDA or TDB=90 where D is the intersection of OT and ABORM1 for angle BOT=67 or angle AOT=67M1 for angle OTB=180-67-90 or angle OTA=180-67-90
+**Guidance:** M2 for [angle ATB] = 180-2\times 67 oeORM1 for [obtuse] angle AOB=2\times 67M1 for angle OAT or angle OBT=90ORM1 for angle TBA=67 or angle TAB=67M1 for angle TDA or TDB=90 where D is the intersection of OT and ABORM1 for angle BOT=67 or angle AOT=67M1 for angle OTB=180-67-90 or angle OTA=180-67-90
 
 ## 16  (4 marks)
 
@@ -204,7 +204,7 @@ $\frac{4}{3}\times\pi\times4^{3}[\frac{256}{3}\pi]$
 
 72
 
-**Guidance:** M1 for 8×8 or for $\frac{1}{2}\times2\times8$ or $\frac{1}{2}(10+8)\times8$
+**Guidance:** M1 for 8\times 8 or for $\frac{1}{2}\times2\times8$ or $\frac{1}{2}(10+8)\times8$
 
 ## 18(b)  (2 marks)
 
@@ -276,7 +276,7 @@ $\frac{10}{x}$
 **Working:**
 
 their $\frac{10}{x}+\frac{5}{x+4}=\frac{7}{2}$ oe
-20x+80+10x=7x^{2}+28x$ oe
+$20x+80+10x=7x^{2}+28x$ oe
 Leading to $7x^{2}-2x-80=0$
 
 **Answer:** Leading to $7x^{2}-2x-80=0$

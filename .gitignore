@@ -8,3 +8,4 @@ __pycache__/
 out/
 assets/
 samples/*.pdf
+tools/node_modules/
