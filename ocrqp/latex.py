@@ -173,6 +173,7 @@ def repair_text(text: str) -> list[tuple[bool, str]]:
     """Fast repair (no subprocess): unicode + delimiters + braces. Returns segments."""
     text = replace_unicode(text)
     text = "\n".join(_fix_line_delimiters(line) for line in text.split("\n"))
+    text = wrap_bare_math(text)
     return [(m, balance_braces(c) if m else c) for m, c in split_math(text)]
 
 
@@ -212,3 +213,101 @@ def sanitize_document(dataset: dict, validate: bool = True) -> tuple[dict, list[
     for (qi, f), segs in field_segs.items():
         dataset["questions"][qi][f] = "".join(f"${c}$" if m else c for m, c in segs)
     return dataset, problems
+
+
+# --------------------------------------------------------------------------- #
+# Bare-math wrapping: glm-ocr leaves simple math (inequalities, products) as
+# plain text with unicode symbols. After unicode->LaTeX conversion those would
+# render as literal \\leq / \\times unless wrapped in $...$. This stage finds math
+# runs inside text segments and wraps them.
+# --------------------------------------------------------------------------- #
+REL_OR_CMD = re.compile(r"\\[a-zA-Z]+|[<>=]")
+MARK_LABEL = re.compile(r"^[MAB]\d+(ft)?$", re.IGNORECASE)
+PROSE_WORDS = {
+    "for", "or", "and", "the", "is", "are", "to", "of", "in", "on", "with",
+    "a", "an", "be", "by", "at", "from", "their", "oe", "final", "answer",
+    "correct", "extras", "extra", "identifying", "angle", "elevation", "figs",
+    "but", "not", "all", "expanded", "brackets", "so", "isw", "ft", "bod",
+    "seen", "awrt", "cao", "www", "dep", "cond", "each", "value", "values",
+    "better", "placed", "diagram", "accurate", "completed", "reversed",
+}
+
+
+def _is_math_token(tok: str) -> bool:
+    if MARK_LABEL.match(tok) or tok.lower() in PROSE_WORDS:
+        return False
+    if REL_OR_CMD.search(tok):
+        return True
+    if re.search(r"[\^_]", tok):
+        return True
+    if re.search(r"\d", tok):
+        return True
+    return False
+
+
+def _split_glued(tok: str) -> tuple[str | None, str]:
+    """Split a leading prose word glued to a math core: 'for-3<x' -> ('for','-3<x')."""
+    m = re.match(r"^([a-z]{2,})(?=[\d\-+(\\<>=])", tok)
+    if m and m.group(1).lower() in PROSE_WORDS:
+        return m.group(1), tok[m.end():]
+    return None, tok
+
+
+def _classify_segment(seg: str) -> list[tuple[bool, str]]:
+    """Split a text segment into (is_math, text) pieces, grouping math runs."""
+    tokens = re.findall(r"\S+|\s+", seg)
+    pieces: list[tuple[bool | None, str]] = []  # None = whitespace
+    for tok in tokens:
+        if tok.isspace():
+            pieces.append((None, tok))
+            continue
+        prose, core = _split_glued(tok)
+        if prose:
+            pieces.append((False, prose))
+        if core:
+            pieces.append((_is_math_token(core), core))
+
+    out: list[tuple[bool, str]] = []
+    i, n = 0, len(pieces)
+    while i < n:
+        m, t = pieces[i]
+        if m is True:
+            grp = [t]
+            j = i + 1
+            while j < n:
+                m2, t2 = pieces[j]
+                if m2 is None:  # whitespace: bridge only if next is math
+                    if j + 1 < n and pieces[j + 1][0] is True:
+                        grp.append(t2)
+                        j += 1
+                        continue
+                    break
+                if m2 is True:
+                    grp.append(t2)
+                    j += 1
+                    continue
+                break
+            out.append((True, "".join(grp)))
+            i = j
+        else:
+            out.append((False, t))  # prose or unbridged whitespace
+            i += 1
+    return out
+
+
+def wrap_bare_math(text: str) -> str:
+    """Wrap bare math expressions in $...$; merge with adjacent math segments."""
+    pieces: list[tuple[bool, str]] = []
+    for is_math, seg in split_math(text):
+        if is_math:
+            pieces.append((True, seg))
+        else:
+            pieces.extend(_classify_segment(seg))
+    # merge consecutive math pieces into one $...$ group
+    merged: list[tuple[bool, str]] = []
+    for is_math, piece in pieces:
+        if is_math and merged and merged[-1][0]:
+            merged[-1] = (True, merged[-1][1] + piece)
+        else:
+            merged.append((is_math, piece))
+    return "".join(f"${t}$" if m else t for m, t in merged)
