@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocrqp"
+version = "0.1.0"
+description = "IGCSE paper/markscheme PDF -> per-question JSON via GLM-OCR (two-pass table rescue + diagram cropping)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pymupdf>=1.24",
+    "pillow>=10",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+    "numpy>=1.26",
+    "opencv-python-headless>=4.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+ocrqp = "ocrqp.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["ocrqp*"]
