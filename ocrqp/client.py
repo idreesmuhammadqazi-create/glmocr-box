@@ -121,13 +121,20 @@ class GLMClient:
                 "Content-Type": "application/json",
             }
         )
+        if config.ca_bundle:
+            self.session.verify = config.ca_bundle
 
     def parse_page(self, image: Image.Image, *, page_index: int) -> OCRResult:
         body = {
             "model": self.config.model,
             "file": image_to_data_url(image),
         }
-        resp = self.session.post(self.url, json=body, timeout=self.config.timeout_s)
+        resp = self.session.post(
+            self.url,
+            json=body,
+            timeout=self.config.timeout_s,
+            verify=self.config.ca_bundle or True,
+        )
         resp.raise_for_status()
         return normalize_response(resp.json())
 

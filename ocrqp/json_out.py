@@ -49,11 +49,9 @@ def document_to_dataset(doc: ProcessedDocument) -> dict:
                 "page": part.page,
             }
             if kind == "marking_scheme":
-                # Best-effort split; refine answer/working/notes against real
-                # markscheme output once sample docs are available.
-                q["answer"] = part.text
-                q["working"] = ""
-                q["notes"] = ""
+                q["answer"] = part.answer
+                q["working"] = part.working
+                q["notes"] = part.notes
             questions.append(q)
 
     return {
