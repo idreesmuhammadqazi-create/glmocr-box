@@ -97,10 +97,19 @@ def split_math(text: str) -> list[tuple[bool, str]]:
 
 def join_segments(segs: list[tuple[bool, str]]) -> str:
     """Reassemble segments, stripping padding inside $...$ (GitHub/KaTeX inline
-    math requires the $ to be immediately adjacent to non-space content)."""
-    out = []
+    math requires the $ to be immediately adjacent to non-space content), and
+    keeping a space boundary between a letter/digit and an adjacent $...$ so the
+    delimiter is never glued to prose (which would stop it rendering as math)."""
+    out: list[str] = []
     for m, c in segs:
-        out.append(("$" + c.strip() + "$") if m else c)
+        if m:
+            if out and out[-1] and out[-1][-1].isalnum():
+                out.append(" ")
+            out.append("$" + c.strip() + "$")
+        else:
+            if c and out and out[-1].endswith("$") and c[0].isalnum():
+                out.append(" ")
+            out.append(c)
     return "".join(out)
 
 
@@ -270,6 +279,7 @@ def _classify_segment(seg: str) -> list[tuple[bool, str]]:
         prose, core = _split_glued(tok)
         if prose:
             pieces.append((False, prose))
+            pieces.append((None, " "))  # keep a boundary so $ isn't glued to a letter
         if core:
             pieces.append((_is_math_token(core), core))
 

@@ -20,7 +20,7 @@ rhombus
 
 $3.5$ or $3\frac{1}{2}$ or $\frac{7}{2}$
 
-**Guidance:** M1 for $11-4=2x$ or$-2x=4-11$ or $\frac{11}{2}-\frac{2x}{2}=\frac{4}{2}$ or better
+**Guidance:** M1 for $11-4=2x$ or $-2x=4-11$ or $\frac{11}{2}-\frac{2x}{2}=\frac{4}{2}$ or better
 
 ## 3  (2 marks)
 
@@ -50,7 +50,7 @@ Triangle accurately completed with arcs at C.
 
 $80$ to $85$
 
-**Guidance:** FT their triangle if $0$ scored in(a)
+**Guidance:** FT their triangle if $0$ scored in (a)
 
 ## 5(c)(i)  (1 marks)
 
@@ -76,7 +76,7 @@ $3g-2g^{2}$ final answer
 
 $-3<x\leq 2$
 
-**Guidance:** B1 for$-3<x$ or $x\leq 2$
+**Guidance:** B1 for $-3<x$ or $x\leq 2$
 
 ## 7(b)  (2 marks)
 
@@ -84,7 +84,7 @@ $-3<x\leq 2$
 
 $-1,0,1,2,3,4$
 
-**Guidance:** B1 for $5$ correct (and no extras) or $6$ correct with one extra or B1 for$-2<x\leq 4$
+**Guidance:** B1 for $5$ correct (and no extras) or $6$ correct with one extra or B1 for $-2<x\leq 4$
 
 ## 8  (1 marks)
 
@@ -301,7 +301,7 @@ $-3.24$ and $3.53$
 
 $2h 10min$
 
-**Guidance:** B2 for $2.168$ to $2.18$ [h] or for$130.08$ to $130.8$ [min] or for$2hours 10.08$ min to $2$ hours $10.8 minORM2$ for $\frac{10}{their positive x}-\frac{5}{their positive x+4}$ $orM1$ for $\frac{10}{their positive x}$ or $\frac{5}{their positive x+4}$
+**Guidance:** B2 for $2.168$ to $2.18$ [h] or for $130.08$ to $130.8$ [min] or for $2hours 10.08$ min to $2$ hours $10.8 minORM2$ for $\frac{10}{their positive x}-\frac{5}{their positive x+4}$ $orM1$ for $\frac{10}{their positive x}$ or $\frac{5}{their positive x+4}$
 
 ## 25(a)  (1 marks)
 
