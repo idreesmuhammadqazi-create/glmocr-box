@@ -1,8 +1,10 @@
 """Command-line interface.
 
 Usage:
-  python -m ocrqp ocr <pdfs...> [--out DIR] [--assets DIR] [--backend glm|mock]
-  python -m ocrqp build --json-dir DIR --select PAPER:ID [...] --out paper.md [--html paper.html]
+  python -m ocrqp ocr <pdfs...> [--out DIR] [--assets DIR] [--upload]
+  python -m ocrqp md <file.json> [--out file.md]
+  python -m ocrqp upload <files...> [--collection]
+  python -m ocrqp build --json-dir DIR --select PAPER:ID [...] --out paper.md
 """
 from __future__ import annotations
 
@@ -13,6 +15,7 @@ from pathlib import Path
 from .client import make_client
 from .config import Config
 from .json_out import document_to_dataset, write_dataset
+from .json_to_md import convert, dataset_to_markdown
 from .ocr import process_pdf
 
 
@@ -29,11 +32,29 @@ def _iter_pdfs(paths: list[str]) -> list[Path]:
     return out
 
 
+def _write_md(dataset: dict, out_dir: str | Path) -> Path:
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / (Path(dataset["source_pdf"]).stem + ".md")
+    path.write_text(dataset_to_markdown(dataset), encoding="utf-8")
+    return path
+
+
+def _make_storage(config: Config):
+    from .storage import StorageClient
+
+    storage = StorageClient.from_config(config)
+    if not storage.health():
+        print("warning: storage.to health check failed", file=sys.stderr)
+    return storage
+
+
 def cmd_ocr(args: argparse.Namespace) -> int:
     config = Config.from_env()
     if args.backend:
         config.backend = args.backend
     client = make_client(config)
+    storage = _make_storage(config) if args.upload else None
 
     pdfs = _iter_pdfs(args.pdfs)
     if not pdfs:
@@ -44,8 +65,38 @@ def cmd_ocr(args: argparse.Namespace) -> int:
         print(f"[ocr] {pdf.name} ...", file=sys.stderr)
         doc = process_pdf(pdf, client, config, args.assets)
         dataset = document_to_dataset(doc)
-        out = write_dataset(dataset, args.out)
-        print(f"  -> {out}  ({len(dataset['questions'])} questions)", file=sys.stderr)
+        jpath = write_dataset(dataset, args.out)
+        mpath = _write_md(dataset, args.out)
+        print(f"  -> {jpath}  ({len(dataset['questions'])} questions)", file=sys.stderr)
+        print(f"  -> {mpath}", file=sys.stderr)
+
+        if storage:
+            coll = storage.create_collection(expected_file_count=2)
+            cid = coll["collection"]["id"]
+            for f in (jpath, mpath):
+                info = storage.upload_file(f, collection_id=cid)
+                print(f"  uploaded {Path(f).name}: {info['file']['url']}", file=sys.stderr)
+            print(f"  collection: {coll['collection']['url']}", file=sys.stderr)
+    return 0
+
+
+def cmd_md(args: argparse.Namespace) -> int:
+    out = convert(args.json, args.out)
+    print(f"-> {out}", file=sys.stderr)
+    return 0
+
+
+def cmd_upload(args: argparse.Namespace) -> int:
+    config = Config.from_env()
+    storage = _make_storage(config)
+    cid = None
+    if args.collection:
+        coll = storage.create_collection(expected_file_count=len(args.files))
+        cid = coll["collection"]["id"]
+        print(f"collection: {coll['collection']['url']}", file=sys.stderr)
+    for f in args.files:
+        info = storage.upload_file(f, collection_id=cid)
+        print(f"{Path(f).name}: {info['file']['url']}")
     return 0
 
 
@@ -59,10 +110,7 @@ def cmd_build(args: argparse.Namespace) -> int:
             return 2
         paper, qid = s.split(":", 1)
         selections.append((paper, qid))
-
-    summary = build_custom_paper(
-        args.json_dir, selections, args.out, args.html, title=args.title
-    )
+    summary = build_custom_paper(args.json_dir, selections, args.out, args.html, title=args.title)
     print(f"built {summary['count']} questions, {summary['total_marks']} marks", file=sys.stderr)
     if summary["missing"]:
         print(f"missing: {summary['missing']}", file=sys.stderr)
@@ -73,12 +121,23 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ocrqp", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    o = sub.add_parser("ocr", help="OCR PDFs into per-question JSON")
+    o = sub.add_parser("ocr", help="OCR PDFs into per-question JSON + MD")
     o.add_argument("pdfs", nargs="+", help="PDF files or directories")
-    o.add_argument("--out", default="out", help="output dir for JSON")
+    o.add_argument("--out", default="out", help="output dir for JSON/MD")
     o.add_argument("--assets", default="assets", help="output dir for diagram PNGs")
     o.add_argument("--backend", choices=["glm", "mock"], default=None)
+    o.add_argument("--upload", action="store_true", help="upload JSON+MD to storage.to")
     o.set_defaults(fn=cmd_ocr)
+
+    m = sub.add_parser("md", help="render a dataset JSON to Markdown")
+    m.add_argument("json", help="input dataset JSON")
+    m.add_argument("--out", required=True, help="output markdown path")
+    m.set_defaults(fn=cmd_md)
+
+    u = sub.add_parser("upload", help="upload files to storage.to")
+    u.add_argument("files", nargs="+", help="files to upload")
+    u.add_argument("--collection", action="store_true", help="group into one collection URL")
+    u.set_defaults(fn=cmd_upload)
 
     b = sub.add_parser("build", help="build a custom paper from selected questions")
     b.add_argument("--json-dir", default="out")

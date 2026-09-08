@@ -63,14 +63,43 @@ cp .env.example .env      # add your ZAI_API_KEY, pick a gateway
 ## Use
 
 ```bash
-# OCR a folder of PDFs -> out/*.json + assets/*.png
+# OCR a folder of PDFs -> out/*.json + out/*.md + assets/*.png
 python -m ocrqp ocr samples/ --out out --assets assets
+
+# ... and upload the JSON+MD to storage.to (one collection URL per PDF)
+python -m ocrqp ocr samples/ --out out --assets assets --upload
+
+# Render an existing dataset JSON to Markdown
+python -m ocrqp md out/0580_w25_ms_41.json --out out/0580_w25_ms_41.md
+
+# Upload arbitrary files to storage.to
+python -m ocrqp upload out/0580_w25_ms_41.json out/0580_w25_ms_41.md --collection
 
 # Build a custom paper from selected questions
 python -m ocrqp build --json-dir out \
   --select 0580/41:1(a) 0580/41:2 \
   --out out/custom.md --html out/custom.html --title "Week 3 practice"
 ```
+
+## Upload to storage.to
+
+`ocr --upload` (and the `upload` command) push files to
+[storage.to](https://storage.to/docs/api) using its presigned-R2 REST API
+(`init -> PUT bytes -> confirm`). JSON and MD are produced per PDF and grouped
+into a **collection** so you get one share URL with both.
+
+- **Anonymous** works out of the box: a random `X-Visitor-Token` is generated
+  once and persisted at `.ocrqp-cache/.visitor_token`. Files expire in 3 days.
+- Set `STORAGE_TO_TOKEN=<bearer>` for an authenticated account (no expiry/caps).
+- `STORAGE_TO_BASE_URL` overrides the API base (default `https://storage.to/api`).
+
+## LaTeX / KaTeX validity
+
+Every math segment is repaired (unicode->LaTeX, dropped `$`, unbalanced `{}`)
+and then **validated by rendering with real KaTeX in strict mode**
+(`tools/katex_check.js`). Anything still invalid is wrapped in `\text{}` so the
+document always renders, and logged under `latex_repairs`. Requires
+`cd tools && npm install` (node); without it, structural repair still runs.
 
 ## Offline demo (no key)
 
@@ -114,6 +143,9 @@ ocrqp/
   ocr.py       pipeline orchestration (two-pass)
   json_out.py  dataset assembly + Cambridge filename parsing
   builder.py   custom paper builder (Markdown + self-contained HTML)
+  latex.py     LaTeX repair + KaTeX strict validation
+  storage.py   storage.to upload client (presigned R2)
+  json_to_md.py dataset JSON -> Markdown
   caches.py    on-disk OCR result cache
 examples/demo_mock.py
 tests/test_pipeline.py
