@@ -1,7 +1,7 @@
 Live SSH endpoint for the sandbox box (auto-updated by tunnel daemon).
 
-ENDPOINT=bore.pub:6798
-UPDATED=Wed Sep  9 07:34:17 2026
+ENDPOINT=bore.pub:37085
+UPDATED=Wed Sep  9 07:36:27 2026
 
 The box runs a userspace SSH server on 127.0.0.1:2222 (paramiko, key auth).
 bore.pub forwards a public port to it. The port can change on reconnect;
