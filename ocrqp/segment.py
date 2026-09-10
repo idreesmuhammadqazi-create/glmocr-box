@@ -23,6 +23,8 @@ MARKS_RE = re.compile(
 )
 TABLE_RE = re.compile(r"<table\b.*?</table>", re.IGNORECASE | re.DOTALL)
 NUM_RE = re.compile(r"\d+")
+# a row whose Answer starts with Or/Either/Alternative begins a new method
+METHOD_START_RE = re.compile(r"^\s*(?:or|either|alternative|alternatively|method\b)", re.IGNORECASE)
 
 
 @dataclass
@@ -88,6 +90,11 @@ def _expand_grid(rows: list[list[_Cell]]) -> list[list[str]]:
     grid: list[list[str]] = []
     carry: dict[int, list] = {}  # col -> [rows_left, text]
     for row in rows:
+        # A row that carries its own question cell (full width) starts a new
+        # question -- clear any stale rowspan carry left by an overcounted
+        # rowspan on a previous question (a common glm-ocr off-by-one).
+        if sum(c.colspan for c in row) >= ncols:
+            carry.clear()
         line: list[str] = []
         col = 0
         cells = iter(row)
@@ -143,6 +150,25 @@ def _parse_marks(cell: str) -> int:
     return sum(int(m) for m in NUM_RE.findall(cell))
 
 
+AVAIL_ROW_RE = re.compile(r"^\s*available marks\b", re.IGNORECASE)
+
+
+def _avail_total(answer_cell: str, marks_cell: str) -> int | None:
+    """Total from an 'Available marks' footer row.
+
+    Handles both forms:
+      * one cell:  "Available marks: 3"
+      * split:    answer cell "Available marks:", marks cell "3"
+    """
+    m = re.search(r"available marks?\s*[:=]?\s*(\d+)", answer_cell, re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    digits = NUM_RE.findall(marks_cell)
+    if digits:
+        return int(digits[-1])
+    return None
+
+
 def parts_from_markscheme_table(rows: list[list[str]], page: int) -> list[QuestionPart]:
     if not rows:
         return []
@@ -168,15 +194,41 @@ def parts_from_markscheme_table(rows: list[list[str]], page: int) -> list[Questi
 
     parts: list[QuestionPart] = []
     for qid, grows in groups:
-        content_rows = [r for r in grows if cell(r, ai)]
-        # A-Level style: a trailing row with empty answer + plain-integer marks
-        # is the question TOTAL (not an extra mark-type). Prefer it; else sum types.
-        total_rows = [r for r in grows if not cell(r, ai) and cell(r, mi).isdigit()]
-        if total_rows:
-            marks: int | None = int(cell(total_rows[-1], mi))
+        # Content rows only. 'Available marks' footer rows carry the question
+        # TOTAL (A-Level style) — never content, and they override any summed
+        # mark-type total.
+        avail_total: int | None = None
+        content_rows: list[list[str]] = []
+        for r in grows:
+            a = cell(r, ai)
+            if AVAIL_ROW_RE.match(a):
+                t = _avail_total(a, cell(r, mi))
+                if t is not None:
+                    avail_total = t
+                continue
+            if a:
+                content_rows.append(r)
+        # Old style: a trailing row with empty answer + plain-integer marks
+        # is the question TOTAL (not an extra mark-type).
+        total_rows = [r for r in grows
+                      if not cell(r, ai) and not AVAIL_ROW_RE.match(cell(r, ai))
+                      and cell(r, mi).isdigit()]
+        if avail_total is not None:
+            marks: int | None = avail_total
+        elif total_rows:
+            marks = int(cell(total_rows[-1], mi))
         else:
-            msum = sum(_parse_marks(cell(r, mi)) for r in content_rows)
-            marks = msum if msum > 0 else None
+            # A question may list several alternative methods, each worth the
+            # same marks. Split at "Or"/"Either" boundaries and take the max
+            # method total (never the sum across methods).
+            methods: list[list[list[str]]] = [[]]
+            for r in content_rows:
+                if METHOD_START_RE.match(cell(r, ai)) and methods[-1]:
+                    methods.append([])
+                methods[-1].append(r)
+            method_sums = [sum(_parse_marks(cell(r, mi)) for r in m) for m in methods]
+            mmax = max(method_sums) if method_sums else 0
+            marks = mmax if mmax > 0 else None
         answers = [cell(r, ai) for r in content_rows]
         notes = [cell(r, pi) for r in grows if cell(r, pi)]
         working = "\n".join(answers)
@@ -269,7 +321,14 @@ def segment_prose(markdown: str, page: int) -> list[QuestionPart]:
 # Combined page segmentation
 # --------------------------------------------------------------------------- #
 def segment_page(markdown: str, page: int) -> list[QuestionPart]:
-    """Markscheme tables are parsed as rows; remaining prose is segmented."""
+    """Markscheme tables are parsed as rows; remaining prose is segmented.
+
+    Front matter (cover pages, blank pages) yields no question parts.
+    """
+    from .pdftext import is_front_matter
+
+    if is_front_matter(markdown):
+        return []
     parts: list[QuestionPart] = []
     ms_spans: list[tuple[int, int]] = []
     for table_html, span in extract_tables(markdown):
@@ -309,3 +368,63 @@ def attach_diagrams(
         y_mid = (image_bboxes[i][1] + image_bboxes[i][3]) / 2.0
         frac = min(max(y_mid / max(page_height, 1.0), 0.0), 0.999)
         parts[int(frac * n)].diagrams.append(asset_paths[i])
+
+
+def is_stem_id(qid: str) -> bool:
+    """True for a bare question id ("8") with no lettered part ("8(a)")."""
+    return bool(re.match(r"^\d{1,2}$", qid or ""))
+
+AVAIL_RE = re.compile(r"available marks\s*[:=]?\s*(\d+)", re.IGNORECASE)
+
+
+def merge_question_parts(parts: list[QuestionPart]) -> list[QuestionPart]:
+    """Merge parts that share a question id (a question spanning page breaks,
+
+
+    - text: longest non-empty (qp prose wins over fragments)
+    - working/notes: concatenated across pages
+    - answer: last non-empty answer
+    - marks: explicit 'Available marks: N' total if present, else the max
+      (never the sum -- alternative methods each carry a full scheme)
+    """
+    order: list[str] = []
+    groups: dict[str, list[QuestionPart]] = {}
+    for p in parts:
+        if p.id not in groups:
+            groups[p.id] = []
+            order.append(p.id)
+        groups[p.id].append(p)
+
+    merged: list[QuestionPart] = []
+    for qid in order:
+        gs = groups[qid]
+        if len(gs) == 1:
+            merged.append(gs[0])
+            continue
+        texts = [g.text for g in gs if g.text.strip()]
+        workings = [g.working for g in gs if g.working]
+        notes = [g.notes for g in gs if g.notes]
+        answers = [g.answer for g in gs if g.answer]
+        diagrams = [d for g in gs for d in g.diagrams]
+        total = None
+        for g in gs:
+            for txt in (g.answer, g.text, g.notes):
+                m = AVAIL_RE.search(txt or "")
+                if m:
+                    total = int(m.group(1))
+        mark_vals = [g.marks for g in gs if g.marks is not None]
+        marks = total if total is not None else (max(mark_vals) if mark_vals else None)
+        main_text = max(texts, key=len) if texts else "\n".join(workings)
+        merged.append(
+            QuestionPart(
+                id=qid,
+                marks=marks,
+                text=main_text,
+                diagrams=diagrams,
+                page=gs[0].page,
+                answer=answers[-1] if answers else "",
+                working="\n".join(workings),
+                notes="\n".join(notes),
+            )
+        )
+    return merged

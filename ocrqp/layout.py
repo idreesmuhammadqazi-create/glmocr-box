@@ -79,9 +79,27 @@ def detect_tables_opencv(
     return _merge_overlapping(boxes)
 
 
+def denormalize_bboxes(boxes: list[BBox], width: float, height: float) -> list[BBox]:
+    """Handle both pixel and normalized [0,1] bbox coordinates.
+
+    The API docs describe ``bbox_2d`` as normalized [x1,y1,x2,y2] in [0,1], but
+    live responses return pixel coords of the submitted image. If every
+    coordinate is <= 1.01 (i.e. the response really is normalized), scale up to
+    pixels; otherwise pass through unchanged.
+    """
+    if boxes and all(v <= 1.01 for b in boxes for v in b):
+        return [
+            (b[0] * width, b[1] * height, b[2] * width, b[3] * height)
+            for b in boxes
+        ]
+    return boxes
+
+
 def resolve_table_bboxes(result: OCRResult, page_image: Image.Image) -> list[BBox]:
     """Model bboxes if present, else OpenCV fallback."""
     boxes = table_bboxes(result)
     if boxes:
-        return _merge_overlapping(boxes)
+        return _merge_overlapping(
+            denormalize_bboxes(boxes, page_image.width, page_image.height)
+        )
     return detect_tables_opencv(page_image)

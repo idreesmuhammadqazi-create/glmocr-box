@@ -6,6 +6,8 @@ __pycache__/
 .pytest_cache/
 .ocrqp-cache/
 out/
+out_qp/
 assets/
 samples/*.pdf
+samples_qp/*.pdf
 tools/node_modules/

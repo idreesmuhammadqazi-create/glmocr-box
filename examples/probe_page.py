@@ -17,7 +17,7 @@ PAGE = int(sys.argv[1]) if len(sys.argv) > 1 else 3
 def main() -> int:
     cfg = Config.from_env()
     client = GLMClient(cfg)
-    with Renderer("samples/9709_s26_ms_61.pdf") as r:
+    with Renderer("samples/9709_s26_ms_42.pdf") as r:
         page = r.render_page(PAGE, cfg.page_dpi)
     res = client.parse_page(page.image, page_index=PAGE)
     print(f"page index {PAGE}  image {page.width}x{page.height}")

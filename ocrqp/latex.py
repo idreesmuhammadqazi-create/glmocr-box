@@ -155,7 +155,7 @@ def validate_katex(exprs: list[str], display: bool = False) -> list[tuple[bool, 
 
 
 def _escape_for_text(s: str) -> str:
-    """Last-resort: make content safe inside \text{} (KaTeX text mode).
+    r"""Last-resort: make content safe inside \text{} (KaTeX text mode).
 
     \text{} cannot span lines and treats \ { } as special, so strip them down
     to plain readable text. Only used when a segment can't be valid math.

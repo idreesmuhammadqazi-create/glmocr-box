@@ -9,7 +9,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import fitz  # PyMuPDF
+try:
+    import pymupdf as fitz  # PyMuPDF >= 1.24 preferred name
+except ImportError:  # pragma: no cover
+    import fitz  # type: ignore
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

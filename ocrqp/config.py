@@ -61,6 +61,7 @@ class Config:
     ca_bundle: str | None  # path to a CA bundle for TLS verification
     table_rescue: bool  # re-OCR table crops at higher DPI (pass 2)
     rescue_max_area: float  # skip rescue for tables covering > this page fraction
+    min_figure_area: float  # drop "image" elements below this page fraction (logos)
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -78,6 +79,7 @@ class Config:
             ca_bundle=_default_ca_bundle(),
             table_rescue=_env_bool("OCRQP_TABLE_RESCUE", True),
             rescue_max_area=_env_float("OCRQP_RESCUE_MAX_AREA", 0.5),
+            min_figure_area=_env_float("OCRQP_MIN_FIGURE_AREA", 0.015),
         )
 
     def validate(self) -> None:

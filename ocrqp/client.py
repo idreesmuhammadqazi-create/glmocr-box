@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import io
+import sys
 from dataclasses import dataclass, field
 from typing import Callable, Protocol
 
@@ -109,6 +110,8 @@ def normalize_response(payload: dict) -> OCRResult:
 # --------------------------------------------------------------------------- #
 # Real GLM backend
 # --------------------------------------------------------------------------- #
+# Real GLM backend
+# --------------------------------------------------------------------------- #
 class GLMClient:
     def __init__(self, config: Config):
         config.validate()
@@ -125,18 +128,33 @@ class GLMClient:
             self.session.verify = config.ca_bundle
 
     def parse_page(self, image: Image.Image, *, page_index: int) -> OCRResult:
-        body = {
-            "model": self.config.model,
-            "file": image_to_data_url(image),
-        }
-        resp = self.session.post(
-            self.url,
-            json=body,
-            timeout=self.config.timeout_s,
-            verify=self.config.ca_bundle or True,
-        )
-        resp.raise_for_status()
-        return normalize_response(resp.json())
+        last_detail = ""
+        for fmt in ("PNG", "JPEG"):
+            body = {
+                "model": self.config.model,
+                "file": image_to_data_url(image, fmt=fmt),
+            }
+            resp = self.session.post(
+                self.url,
+                json=body,
+                timeout=self.config.timeout_s,
+            )
+            if resp.status_code < 400:
+                return normalize_response(resp.json())
+            # Surface the server's error body; retry once with JPEG if the
+            # PNG payload is rejected (size limit / decode issue).
+            try:
+                err = resp.json().get("error", {})
+                detail = err.get("message", "") or resp.text[:300]
+            except Exception:
+                detail = resp.text[:300]
+            print(
+                f"[glm] {fmt} rejected [{resp.status_code}]: {detail!r}",
+                file=sys.stderr,
+            )
+            last_detail = detail
+        raise RuntimeError(f"GLM layout_parsing failed: {last_detail}")
+
 
 
 # --------------------------------------------------------------------------- #

@@ -1,13 +1,17 @@
 """End-to-end pipeline test using the mock OCR backend + a synthetic PDF."""
 from __future__ import annotations
 
-import fitz  # PyMuPDF
+try:
+    import pymupdf as fitz  # PyMuPDF >= 1.24 preferred name
+except ImportError:  # pragma: no cover
+    import fitz  # type: ignore
 import pytest
 
 from ocrqp.client import LayoutElement, MockClient, OCRResult
 from ocrqp.config import Config
 from ocrqp.json_out import document_to_dataset, parse_filename
 from ocrqp.ocr import process_pdf
+from ocrqp.segment import parts_from_markscheme_table
 from ocrqp.splice import splice_tables
 
 
@@ -53,6 +57,39 @@ def test_parse_filename():
     assert meta["kind"] == "marking_scheme"
     assert meta["paper"] == "0580/41"
     assert "2025" in meta["series"]
+
+
+def test_available_marks_footer_rows():
+    """A-Level 'Available marks' footer rows are totals, not content."""
+    rows = [
+        ["Question", "Answer", "Marks", "Guidance"],
+        ["3(a)", "-0.5", "M1", "for resolving"],
+        ["3(a)", "Available marks:", "5", ""],
+        ["3(b)", "$\\mu = 0.336$", "M1 A1", ""],
+        ["3(b)", "Available marks: 3", "", ""],
+    ]
+    parts = parts_from_markscheme_table(rows, page=12)
+    by_id = {p.id: p for p in parts}
+    assert set(by_id) == {"3(a)", "3(b)"}
+    assert by_id["3(a)"].marks == 5
+    assert by_id["3(a)"].answer == "-0.5"
+    assert by_id["3(b)"].marks == 3
+    assert by_id["3(b)"].answer == "$\\mu = 0.336$"
+    assert "Available marks" not in by_id["3(a)"].working
+    assert "Available marks" not in by_id["3(b)"].working
+
+
+def test_method_total_not_summed():
+    """Alternative methods each carry the full scheme; never sum across them."""
+    rows = [
+        ["Question", "Answer", "Marks", "Guidance"],
+        ["1(a)", "$\\frac{10}{x}$", "M1", ""],
+        ["1(a)", "16.8", "A1", ""],
+        ["1(a)", "Or", "M1 A1", ""],
+    ]
+    parts = parts_from_markscheme_table(rows, page=1)
+    assert len(parts) == 1
+    assert parts[0].marks == 2  # max method total, not 2+3
 
 
 def test_full_pipeline_mock(tmp_path):

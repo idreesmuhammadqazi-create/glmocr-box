@@ -59,6 +59,16 @@ cp .env.example .env      # add your ZAI_API_KEY, pick a gateway
 | `GLM_OCR_MODEL` | `glm-ocr` | |
 | `OCRQP_BACKEND` | `glm` | `glm` (real) or `mock` (offline) |
 | `OCRQP_PAGE_DPI` / `OCRQP_TABLE_DPI` | `200` / `300` | render resolutions |
+| Var | Default | Notes |
+|---|---|---|
+| `ZAI_API_KEY` | — | required for real OCR |
+| `ZAI_BASE_URL` | `https://open.bigmodel.cn/api/paas/v4` | or `https://api.z.ai/api/paas/v4` |
+| `GLM_OCR_MODEL` | `glm-ocr` | |
+| `OCRQP_BACKEND` | `glm` | `glm` (real) or `mock` (offline) |
+| `OCRQP_PAGE_DPI` / `OCRQP_TABLE_DPI` | `200` / `300` | render resolutions |
+| `OCRQP_TABLE_RESCUE` | `true` | pass-2 re-OCR of table crops |
+| `OCRQP_RESCUE_MAX_AREA` | `0.5` | skip rescue for tables > this page fraction |
+| `OCRQP_MIN_FIGURE_AREA` | `0.015` | drop image elements < this page fraction (filters logos) |
 
 ## Use
 
@@ -108,27 +118,55 @@ python examples/demo_mock.py     # synthetic PDF -> JSON -> custom paper
 python -m pytest tests/ -q       # test suite (mock backend)
 ```
 
-## Status: validated on a real markscheme
+## Status: validated on real markschemes + question papers
 
-Ran against `0580_w25_ms_41.pdf` (Cambridge IGCSE Maths Paper 4 mark scheme,
-Oct/Nov 2025) via the international gateway (`api.z.ai`):
+Markschemes (all PASS, totals match official maxima, KaTeX 100% valid):
 
-- **46 questions** extracted, **total marks = 100** (matches the paper maximum).
-- Markscheme pages are a single `Question | Answer | Marks | Partial Marks`
-  table. `segment.py` parses it with a **rowspan-aware** grid expander, groups
-  each question's worked-solution rows, and sums mark-types (`M1`/`M2`/`A1`/`B2`).
-- Equations come through as clean LaTeX (`$3\frac{1}{2}$`, `$3g-2g^{2}$`).
-- Full-page tables skip pass-2 rescue (pass 1 is already accurate; re-OCRing a
-  whole-page crop is slow). Rescue still applies to small embedded tables.
+| Paper | Kind | Questions | Marks | KaTeX |
+|---|---|---|---|---|
+| `0580/41` IGCSE Maths P4 (w25) | mark scheme | 46 | 100 / 100 | 347/347 |
+| `9709/22` A-Level Pure 2 (s26) | mark scheme | 12 | 50 / 50 | 230/230 |
+| `9709/42` A-Level Mechanics (s26) | mark scheme | 14 | 50 / 50 | 475/475 |
+| `9709/61` A-Level Prob & Stats 1 (s26) | mark scheme | 17 | 50 / 50 | 207/207 |
+Question papers (validated against the matching mark scheme's ground truth):
 
-## Tuning (remaining, needs a real question paper)
+| Paper | Result |
+|---|---|
+| `9709/22` qp (Pure) | 11 of 12 parts, per-part marks **all exactly correct** (46/50). Miss: 5(a), content the OCR dropped entirely. |
+| `9709/42` qp (Mechanics) | 13 of 14 parts **PASS**, per-part marks all correct (47/50), 0 LaTeX fallbacks. Miss: 3(b). |
+| `0580/42` qp (IGCSE.Ext) | 35 questions, 87/100 marks; 32/39 per-part marks exactly match the ms, 3 off-by-one band boundaries, 4 missing. 12 LaTeX fallbacks. |
+Diagrams: 16 figure crops extracted across the qps and attached to the correct
+questions (`Q3` log graph, `Q8(a)` geometry, `Q19(b)` stats chart, ...).
 
-- `segment.py` prose regexes — question/part/marks detection for **question
-  papers** (the markscheme path is done; the qp path is heuristic).
-- `segment.attach_diagrams` — diagram→question attachment heuristic (needs a qp
-  with real figures to validate).
-- `client.normalize_response` — confirmed for the current schema; revisit if the
-  gateway changes `layout_details`.
+### How the qp path recovers what glm-ocr drops
+
+glm-ocr has three systematic failure modes on question papers, all patched
+via *digital-PDF text-layer fallbacks* (`ocrqp/pdftext.py`):
+
+1. **Isolated margin elements** — question numbers ("3") and marks brackets
+   ("[4]") are separate tiny text boxes that get dropped; re-injected from
+   the text layer (numbers before segmentation, marks after, banded per
+   question by y-position).
+2. **Sparse pages return only header markers** — answer-space-only
+   continuation pages come back empty; the full page is rebuilt from the
+   text layer.
+3. **Dropped content blocks** (e.g. a sketch question) — unrecoverable in
+   OCR only; the marks band still records it, so the total reports short.
+
+## Tuning (remaining)
+
+- `9709/22` 5(a) and `9709/42` 3(b): content blocks glm-ocr dropped entirely.
+  The marks bands still report them, so totals flag short; a text-layer
+  content-rebuild fallback could recover the text.
+- `0580/42` 17(a)/8(a)/8(b): three off-by-one marks-band assignments where
+  brackets sit close to question-number y-positions (needs band tolerance).
+- Pass-2 PNG payloads are sometimes rejected by the gateway (large image
+  payloads); the client retries with JPEG automatically.
+- `client.normalize_response` — confirmed against the official
+  [layout-parsing spec](https://docs.z.ai/api-reference/tools/layout-parsing)
+  (fields: `md_results`, `layout_details[].label/bbox_2d/content`). Note: the
+  docs describe `bbox_2d` as normalized [0,1] but live responses return pixels;
+  `layout.denormalize_bboxes` handles both.
 
 ## Layout
 

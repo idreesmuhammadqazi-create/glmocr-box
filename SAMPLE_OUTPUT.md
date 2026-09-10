@@ -74,9 +74,9 @@ $3g-2g^{2}$ final answer
 
 **Working:**
 
-$-3<x\leq 2$
+$-3<x \leq 2$
 
-**Guidance:** B1 for $-3<x$ or $x\leq 2$
+**Guidance:** B1 for $-3<x$ or x $\leq 2$
 
 ## 7(b)  (2 marks)
 
@@ -84,7 +84,7 @@ $-3<x\leq 2$
 
 $-1,0,1,2,3,4$
 
-**Guidance:** B1 for $5$ correct (and no extras) or $6$ correct with one extra or B1 for $-2<x\leq 4$
+**Guidance:** B1 for $5$ correct (and no extras) or $6$ correct with one extra or B1 for $-2<x \leq 4$
 
 ## 8  (1 marks)
 
@@ -98,7 +98,7 @@ $1.13$ or $1.125...$
 
 $34.2$
 
-**Guidance:** M1 for figs $342$ or for $k\times 60\times 60$ or for $k\div 1000$
+**Guidance:** M1 for figs $342$ or for $k\times60\times60$ or for $k\div1000$
 
 ## 10  (2 marks)
 
@@ -114,7 +114,7 @@ $(4,5)$
 
 $51$
 
-**Guidance:** M1 for $60\times$ $\frac{100-15}{100}$ oe or B1 for $9$
+**Guidance:** M1 for $60\times\frac{100-15}{100}$ oe or B1 for $9$
 
 ## 11(b)  (2 marks)
 
@@ -122,7 +122,7 @@ $51$
 
 $68.40$
 
-**Guidance:** M1 for $[\cdot] \times \frac{100-15}{100}=58.14$ oe
+**Guidance:** M1 for $[\cdot]\times\frac{100-15}{100}=58.14$ oe
 
 ## 12(a)  (1 marks)
 
@@ -180,7 +180,7 @@ $233$ or $233.3$ to $233.4$
 
 $46$
 
-**Guidance:** M2 for [angle ATB] $= 180-2\times 67 oeORM1$ for [obtuse] angle $AOB=2\times 67M1$ for angle OAT or angle $OBT=90ORM1$ for angle $TBA=67$ or angle $TAB=67M1$ for angle TDA or $TDB=90$ where D is the intersection of OT and $ABORM1$ for angle $BOT=67$ or angle $AOT=67M1$ for angle $OTB=180-67-90$ or angle $OTA=180-67-90$
+**Guidance:** M2 for [angle ATB] $= 180-2 \times 67 oeORM1$ for [obtuse] angle $AOB=2 \times 67M1$ for angle OAT or angle $OBT=90ORM1$ for angle $TBA=67$ or angle $TAB=67M1$ for angle TDA or $TDB=90$ where D is the intersection of OT and $ABORM1$ for angle $BOT=67$ or angle $AOT=67M1$ for angle $OTB=180-67-90$ or angle $OTA=180-67-90$
 
 ## 16  (4 marks)
 
@@ -188,7 +188,7 @@ $46$
 
 $13.09$
 
-**Guidance:** M1 for mid-values $7.5,11$ and $16 soiM1$ for Σfx where x-values in correct interval(including $boundaries)M1dep$ on second M1 for $\frac{\Sigma fx}{50}$
+**Guidance:** M1 for mid-values $7.5,11$ and $16 soiM1$ for  $\Sigma$ fx where x-values in correct interval(including $boundaries)M1dep$ on second M1 for $\frac{\sum fx}{50}$
 
 ## 17  (3 marks)
 
@@ -204,7 +204,7 @@ $[y=-2x+4]$
 
 $72$
 
-**Guidance:** M1 for $8\times 8$ or for $\frac{1}{2}\times2\times8$ or $\frac{1}{2}(10+8)\times8$
+**Guidance:** M1 for $8 \times 8$ or for $\frac{1}{2}\times2\times8$ or $\frac{1}{2}(10+8)\times8$
 
 ## 18(b)  (2 marks)
 
@@ -261,7 +261,7 @@ or M1 for $200 \times[\quad]^{25}=301.10$
 
 **Working:**
 
-$[\because y=\frac{9}{\sqrt{x+1}}$ oe final answer
+$[y=\frac{9}{\sqrt{x+1}}$ oe final answer
 
 **Guidance:** M1 for $3=\frac{k}{\sqrt{8+1}}$ oe or for $\frac{9}{\sqrt{x+1}}$ seen and spoiled
 
